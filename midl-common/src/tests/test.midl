@@ -1,0 +1,188 @@
+// Copyright (c) 2018 E.S.R.Labs. All rights reserved.
+//
+// NOTICE:  All information contained herein is, and remains
+// the property of E.S.R.Labs and its suppliers, if any.
+// The intellectual and technical concepts contained herein are
+// proprietary to E.S.R.Labs and its suppliers and may be covered
+// by German and Foreign Patents, patents in process, and are protected
+// by trade secret or copyright law.
+// Dissemination of this information or reproduction of this material
+// is strictly forbidden unless prior written permission is obtained
+// from E.S.R.Labs.
+
+package examples.test;
+
+class EmptyClass {}
+enum EmptyEnum {}
+interface IEmpty {
+    void emptyClassArg(EmptyClass empty);
+    void emptyClassArgOneway(EmptyClass empty) oneway;
+    EmptyClass emptyClassReturn();
+    Promise<EmptyClass> emptyClassReturnPromise();
+
+    void emptyEnumArg(EmptyEnum empty);
+    void emptyEnumArgOneway(EmptyEnum empty) oneway;
+    EmptyEnum emptyEnumReturn();
+    Promise<EmptyEnum> emptyEnumReturnPromise();
+}
+
+class Simple {
+    int a;
+}
+
+class Pods {
+    bool a;
+    u8 b;
+    u16 c;
+    u32 d;
+    i8 e;
+    i16 f;
+    i32 g;
+    i64 h;
+    float i;
+    double j;
+    string k;
+}
+
+interface IPodClass {
+    void foo(Pods pods);
+}
+
+class ClassWithCollections {
+    List<i32> list;
+    Map<i32, i32> map;
+    Set<i32> set;
+    i32[] array;
+}
+
+@Anno(a=3)
+class AnnotatedClass {
+    @Anno(a=3)
+    bool foo;
+}
+
+class ClassWithConstants {
+    bool FOO = false;
+    int BAR = 23;
+    string HELLO = "Hello";
+
+    // Member with same name as a constant
+    int hello;
+}
+
+class ClassWithOptionals {
+    bool blah;
+    Optional<int> foo;
+    Optional<String> bar;
+    Optional<Simple> baz;
+}
+
+enum SomeEnumeration { A, B, C, D, }
+
+class ClassWithEnums {
+    SomeEnumeration foo;
+    SomeEnumeration bar;
+    Set<SomeEnumeration> baz;
+}
+
+class ClassNested {
+    ClassWithEnums foo;
+    ClassWithEnums[] bar;
+    ClassWithEnums[] barBaz;
+}
+
+interface IInterfaceWithCollections {
+    Map<i32, i32> map(Map<i32, i32> data);
+    Map<i32, Simple> mapObject(Map<i32, Simple> data);
+
+    Set<i32> set(Set<i32> data);
+    Set<Simple> setObject(Set<Simple> data);
+
+    i32[] array(i32[] data);
+    Simple[] arrayOject(Simple[] data);
+
+    Promise<List<i32>> listPromise(List<i32> data);
+    Promise<Map<i32, i32>> mapPromise(Map<i32, i32> data);
+    Promise<Set<i32>> setPromise(Set<i32> data);
+    Promise<i32[]> arrayPromise(i32[] data);
+
+    void listOneway(List<i32> data) oneway;
+    void mapOneway(Map<i32, i32> data) oneway;
+    void setOneway(Set<i32> data) oneway;
+    void arrayOneway(i32[] data) oneway;
+}
+
+interface IInterfaceWithClassCollections {
+    List<Simple> list(List<Simple> data);
+    Set<Simple> set(Set<Simple> data);
+    Simple[] array(Simple[] data);
+
+    Promise<List<Simple>> listPromise(List<Simple> data);
+    Promise<Set<Simple>> setPromise(Set<Simple> data);
+    Promise<Simple[]> arrayPromise(Simple[] data);
+
+    void listOneway(List<Simple> data) oneway;
+    void setOneway(Set<Simple> data) oneway;
+    void arrayOneway(Simple[] data) oneway;
+}
+
+interface IPromiseVoidMethod {
+    Promise<void> promiseVoid();
+}
+
+// Interleaved packages names
+class test.foo.Foo {
+    test.bar.Bar bar;
+}
+class test.foo.Bar {
+    int dummy;
+}
+class test.bar.Foo {
+    test.foo.Foo foo;
+}
+class test.bar.Bar {
+    int dummy;
+}
+interface test.baz.Baz {
+    test.foo.Foo baz0(test.foo.Foo foo);
+    test.foo.Bar baz1(test.foo.Bar bar);
+    test.bar.Foo baz2(test.bar.Foo foo);
+    test.bar.Bar baz3(test.bar.Bar bar);
+}
+
+// Use interface IBarInterface from a different namespace (bar)
+interface test.foo.IFooInterface {
+    test.bar.IBarInterface bar(test.bar.IBarInterface b);
+    Promise<test.bar.IBarInterface> barPromise(test.bar.IBarInterface b);
+}
+interface test.bar.IBarInterface {
+    void bar();
+}
+
+// Nested collections
+struct NestedCollections {
+    Map<i32, Set<List<int>>> a;
+    Map<i32, List<Map<int, int>>> b;
+}
+
+interface INestedCollectionsInterface {
+    void a(NestedCollections a);
+    void b(NestedCollections a);
+    void c(List<List<List<bool>>> b);
+}
+
+interface IDuplicateMethodIdentifier {
+    void bar(int a);
+    void foo(int bar);
+    void baz();
+    // The foos only differ in arguments
+    void foo(bool bar);
+    void foo(short bar);
+}
+
+interface IWithOptionals {
+    void foo(ClassWithOptionals value);
+    Optional<i32> bar();
+    Optional<i32> bar(Optional<bool> baz);
+    Optional<Promise<i32>> moreBar();
+}

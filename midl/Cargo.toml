@@ -1,0 +1,24 @@
+[package]
+authors = ["Felix Obenhuber <felix.obenhuber@esrlabs.com>"]
+name = "midl"
+version = "0.1.0"
+edition = "2018"
+
+[[bin]]
+name = "midl"
+doc = false
+
+[dependencies]
+clap = "2.32.0"
+env_logger = "0.5.13"
+failure = "0.1.2"
+#fibex = { path = "../midl-fibex", package = "midl-fibex", optional = true }
+glob = "0.2.11"
+log = "0.4.5"
+midl-common = { path = "../midl-common" }
+#someip = { path = "../midl-someip", package = "midl-someip", optional = true }
+time = "0.1.42"
+
+[features]
+default = []
+#all = ["fibex", "someip"]

@@ -1,0 +1,41 @@
+ALPHA = _{ ASCII_ALPHA }
+COMMENT = _{ "//" ~ (!NEWLINE ~ ANY)* }
+DIGIT = _{ ASCII_DIGIT }
+NEWLINE = _{ "\r" | "\r\n" | "\n" }
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+
+IDENT = @{ ALPHA ~ (ALPHA | DIGIT | "_")* }
+POD = { "boolean" | "char" | "byte" | "short" | "int" | "long" | "float" | "double" | "String" | "bool" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" | "string" }
+NAME = @{ (IDENT+ ~ ".")* ~ IDENT }
+ARRAY = { (LIST | SET | MAP | POD | NAME) ~ "[]" }
+LIST = { "List<" ~ TYPE ~ ">" }
+MAP = { "Map<" ~ POD ~ "," ~ TYPE ~ ">" }
+OPTIONAL = { "Optional<" ~ TYPE ~ ">" }
+SET = { "Set<" ~ TYPE ~ ">" }
+TYPE = { ARRAY | LIST | SET | MAP | OPTIONAL | POD | NAME }
+
+ANNOTATION_VALUE = { (ALPHA | DIGIT | "-" | "_" | "." | ":")+ }
+ANNOTATION_KEY_VALUE_PAIR = { IDENT ~ ("=" ~ ANNOTATION_VALUE)? }
+ANNOTATION_ITEM = { ANNOTATION_GROUP | ANNOTATION_KEY_VALUE_PAIR }
+ANNOTATION_GROUP = { "@" ~ IDENT ~ ( "(" ~ (ANNOTATION_ITEM ~ ("," ~ ANNOTATION_ITEM)*)* ~ ")")? }
+ANNOTATIONS = { ANNOTATION_GROUP* }
+
+PATH = @{ IDENT+ ~ ("." ~ IDENT+)* }
+PACKAGE = { "package" ~ PATH ~ ";"}
+
+ENUM = { ANNOTATIONS ~ "enum" ~ NAME ~ "{" ~ ENUM_ITEM* ~ "}" }
+ENUM_ITEM = { ANNOTATIONS ~ IDENT ~ ","}
+
+CONSTANT_VALUE = @{ ("-"? ~ DIGIT+) | "true" | "false" | "\"" ~ (" " | ALPHA)* ~ "\"" }
+CONSTANT = { POD ~ IDENT ~ "=" ~ CONSTANT_VALUE ~ ";"}
+FIELD = { ANNOTATIONS ~ TYPE ~ IDENT ~ ";" }
+CLASS = { ANNOTATIONS ~ ("struct" | "class") ~ NAME ~ "{" ~ (CONSTANT | FIELD)* ~ "}" }
+
+ARGUMENT = { ANNOTATIONS ~ TYPE ~ IDENT }
+PROMISE = { "Promise<" ~ TYPE ~ ">" }
+METHOD_TYPE = { ("Optional<" ~ PROMISE ~ ">") | PROMISE | "void" | TYPE }
+ONEWAY = { "oneway"? }
+METHOD = { ANNOTATIONS ~ METHOD_TYPE ~ IDENT ~ "(" ~ (ARGUMENT ~ ("," ~ ARGUMENT)*)? ~ ")" ~ ONEWAY ~ ";" }
+INTERFACE = { ANNOTATIONS ~ "interface" ~ NAME ~ "{" ~ METHOD* ~ "}" }
+
+MODEL = { SOI ~ PACKAGE? ~ (ENUM | CLASS | INTERFACE)* ~ EOI }

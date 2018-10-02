@@ -1,0 +1,67 @@
+# Based on the "trust" template v0.1.2
+# https://github.com/japaric/trust/tree/v0.1.2
+
+dist: trusty
+language: rust
+services: docker
+sudo: required
+
+env:
+  global:
+    - CRATE_NAME=midl
+
+matrix:
+  include:
+    - env: TARGET=x86_64-unknown-linux-musl
+      os: linux
+    - env: TARGET=x86_64-apple-darwin
+      os: osx
+    - env: TARGET=x86_64-pc-windows-msvc
+      os: windows
+
+before_install:
+  - set -e
+  - rustup self update
+
+addons:
+  apt:
+    packages:
+      - clang
+      - cmake
+      - openjdk-8-jdk
+
+install:
+  - sh ci/install.sh
+  - source ~/.cargo/env || true
+
+script:
+  - bash ci/script.sh
+
+after_script: set +e
+
+before_deploy:
+  - bash ci/before_deploy.sh
+
+deploy:
+   api_key:
+     secure: "mzrEUEvk8WuXUcJTjCNq8H6Nhr9yJ9+wOOKYZQubOvi8RIgqMX+Idy3tTmCQqB2MaVfeijexy4Mu314IedyRlIU90rqzwm0Mzn2GMPbqrKnFX40q/v+b60Kx+s0M78rTLwOxPgAHEpQVy7hlHFvzXEFoLfO6e+LP23pUaQjUKnWyYmDKD7KfIOLRM26o3Su9eeSxwoF2vCaxPP5TCuVWXQIizuid1ivoWeeUHpsm0hhpbB75ZOLBxYirjX2ZarOp3NTjQ3aHp9Dw5RVLwRcflvB9xihaxmKi8EhjGXkC8Er4Mg5PJKsDY2aN+pM/2KrMwk4zHfNLPdK1m4BoNwpcDTPh78KwIa0Dd4ggrUjbRxyp8wtGE5SrLfokab0GxwfV2wVXTzxnrmeaLoPNqTVKgdkHSpBTlzaV0h5ofizBoc8zsz5Cl/byqt1UswRGj+KeqpuvdlLq8oB3q2xhZzaNV3pQYqyUjMEYiGzXTzM7ivWrRGnqZdgrBoTpJ8iJaFG0GD0c+F2ke3zI0hNvsLwAqd7u4PW17Chh3cF6o+wbuwX5WPP2dHtUoNH5ePyWGwpAmDh+K0Ryzg4y+peZADkQJXXa51BeoLNrsBWbrXZq1ZQvj77i70umXi1bp1fFezEu8jsIp9LZqI/cNdWaTo08oE1Lyh42YaUD1SqMlSNW18w="
+   file_glob: true
+   file: $CRATE_NAME-$TRAVIS_TAG-$TARGET.*
+   on:
+     condition: $TRAVIS_RUST_VERSION = stable
+     tags: true
+   provider: releases
+   skip_cleanup: true
+
+cache: cargo
+before_cache:
+  - chmod -R a+r $HOME/.cargo
+
+branches:
+  only:
+    - /^v\d+\.\d+\.\d+.*$/
+    - master
+
+notifications:
+  email:
+    on_success: never

@@ -1,0 +1,21 @@
+[package]
+name = "midl-common"
+version = "0.1.0"
+authors = ["Felix Obenhuber <felix.obenhuber@esrlabs.com>"]
+edition = "2018"
+
+[dependencies]
+failure = "0.1.2"
+heck = "0.3.0"
+itertools = "0.7.8"
+log = "0.4.5"
+pest = "2.1.1"
+pest_derive = "2.1.0"
+serde = { version = "1.0.79", features = ["rc"] }
+serde_derive = "1.0.79"
+serde_json = "1.0.32"
+subprocess = "0.1.17"
+tempdir = "0.3.7"
+glob = "0.2.11"
+fs_extra = "1.1.0"
+num_cpus = "1.8.0"

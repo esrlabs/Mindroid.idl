@@ -1,0 +1,59 @@
+// A compact disc player
+
+package hifi.compactdiscplayer;
+
+enum Genre {
+    Electro,
+    Folk,
+    Punk,
+}
+
+struct hifi.compactdiscplayer.Artist {
+    string name;
+}
+
+struct Track {
+    string title;
+    i32 duration;
+}
+
+struct Disc {
+    Artist artist; // Nested class
+    string title;
+    u16 year;
+    List<Track> tracks;
+    Set<String> genres;
+    Map<u32, u32> trackLength;
+}
+
+interface IRemoteControl {
+    Promise<void> play();
+    Promise<void> pause();
+}
+
+interface IDisplay {
+    void onLoad(String artist, String title, int duration, Track[] tracks);
+    void onPlay(string title);
+    void onPause();
+}
+
+interface ICompactDiscPlayer {
+    void play();
+    void pause();
+
+    int next();
+    int prev();
+
+    void insert(Disc disc);
+    Promise<Disc> eject();
+
+    // Retrieve a remote control handle
+    IRemoteControl remoteControl(string id);
+
+    void registerDisplay(IDisplay display);
+    void unregisterDisplay(IDisplay display);
+}
+
+struct Channel {
+    String name;
+}
