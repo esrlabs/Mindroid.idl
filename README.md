@@ -1,5 +1,4 @@
 [![Travis Build Status](https://travis-ci.org/esrlabs/Mindroid.idl.svg?branch=master)](https://travis-ci.org/esrlabs/Mindroid.idl)
-[![Appveyor Build Status](https://ci.appveyor.com/api/projects/status/github/esrlabs/Mindroid.idl?branch=master&svg=true)](https://ci.appveyor.com/project/flxo/mindroid-idl)
 
 # Mindroid.idl
 
