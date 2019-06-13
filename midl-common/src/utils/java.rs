@@ -729,7 +729,6 @@ pub mod interface {
     }
 
     /// Generate interface java file
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cyclomatic_complexity))]
     pub fn generate<G: Generator>(
         model: &Model,
         interface: &Interface,
@@ -737,20 +736,35 @@ pub mod interface {
         license: Option<&str>,
     ) -> Result<(), Error> {
         let mut fmt = Formatter::new(writer(&interface.name, out, "java")?);
-        let name = &interface.name;
-        let ident = &name.ident;
-        let package = &name.package;
 
+        generate_license(license, &mut fmt)?;
+        generate_package(interface, &mut fmt)?;
+        generate_imports::<G>(interface, &mut fmt)?;
+        fmt.newline()?;
+
+        generate_interface::<G>(model, interface, &mut fmt)?;
+
+        fmt.flush().map_err(Into::into)
+    }
+
+    fn generate_license(license: Option<&str>, fmt: &mut Formatter) -> Result<(), Error> {
         if let Some(lic) = license {
             fmt!(fmt, lic)?;
             fmt.newline()?;
         }
+        Ok(())
+    }
 
+    fn generate_package(interface: &Interface, fmt: &mut Formatter) -> Result<(), Error> {
+        let package = &interface.name.package;
         if !package.as_path().is_empty() {
             fmt!(fmt, "package {};", package.as_path().join("."))?;
             fmt.newline()?;
         }
+        Ok(())
+    }
 
+    fn generate_imports<G: Generator>(interface: &Interface, fmt: &mut Formatter) -> Result<(), Error> {
         let mut imports = G::imports(interface);
 
         imports.insert("mindroid.os.Binder".into());
@@ -767,10 +781,27 @@ pub mod interface {
         for import in imports.iter().sorted() {
             fmt!(fmt, "import {};", import.as_path().join("."))?;
         }
+        Ok(())
+    }
+
+    fn generate_interface<G: Generator>(
+        model: &Model,
+        interface: &Interface,
+        fmt: &mut Formatter,
+    ) -> Result<(), Error> {
+        fmt!(fmt, "public interface {} extends IInterface {{", interface.name.ident)?;
+        fmt.increment();
+        generate_stub::<G>(model, interface, fmt)?;
         fmt.newline()?;
 
-        fmt!(fmt, "public interface {} extends IInterface {{", ident)?;
-        fmt.increment();
+        generate_proxy::<G>(interface, fmt)?;
+        fmt.decrement();
+        fmt!(fmt, "}")
+    }
+
+    fn generate_stub<G: Generator>(model: &Model, interface: &Interface, fmt: &mut Formatter) -> Result<(), Error> {
+        let name = &interface.name;
+        let ident = &name.ident;
         fmt!(
             fmt,
             "public static abstract class Stub extends Binder implements {} {{",
@@ -810,7 +841,7 @@ pub mod interface {
         fmt.increment();
         fmt!(fmt, "switch (what) {")?;
         for method in &interface.methods {
-            G::on_transact(interface, method, &mut fmt)?;
+            G::on_transact(interface, method, fmt)?;
         }
         fmt!(fmt, "default:")?;
         fmt____!(fmt, "super.onTransact(what, data, result);")?;
@@ -824,15 +855,18 @@ pub mod interface {
 
         fmt!(fmt, "private final IBinder mRemote;")?;
         fmt.newline()?;
+
         fmt!(fmt, "Proxy(IBinder remote) {")?;
         fmt____!(fmt, "mRemote = remote;")?;
         fmt!(fmt, "}")?;
         fmt.newline()?;
+
         fmt!(fmt, "@Override")?;
         fmt!(fmt, "public IBinder asBinder() {")?;
         fmt____!(fmt, "return mRemote;")?;
         fmt!(fmt, "}")?;
         fmt.newline()?;
+
         fmt!(fmt, "@Override")?;
         fmt!(fmt, "public boolean equals(final Object obj) {")?;
         fmt.increment();
@@ -846,29 +880,32 @@ pub mod interface {
         fmt.decrement();
         fmt!(fmt, "}")?;
         fmt.newline()?;
+
         fmt!(fmt, "@Override")?;
         fmt!(fmt, "public int hashCode() {")?;
         fmt____!(fmt, "return mRemote.hashCode();")?;
         fmt!(fmt, "}")?;
-
         for method in &interface.methods {
             fmt.newline()?;
-            G::proxy_method(interface, method, &mut fmt)?;
+            G::proxy_method(interface, method, fmt)?;
         }
 
         fmt.decrement();
         fmt!(fmt, "}")?;
-
         fmt.newline()?;
+
         for method in &interface.methods {
             let id = method_message_id(interface, method);
             fmt!(fmt, "static final int {} = {};", id, G::message_id(interface, method))?;
         }
 
         fmt.decrement();
-        fmt!(fmt, "}")?;
+        fmt!(fmt, "}")
+    }
 
-        fmt.newline()?;
+    fn generate_proxy<G: Generator>(interface: &Interface, fmt: &mut Formatter) -> Result<(), Error> {
+        let name = &interface.name;
+        let ident = &name.ident;
 
         fmt!(fmt, "static class Proxy implements {} {{", ident)?;
 
@@ -877,6 +914,7 @@ pub mod interface {
         fmt!(fmt, "private final Stub mStub;")?;
         fmt!(fmt, "private final {} mProxy;", ident)?;
         fmt.newline()?;
+
         fmt!(fmt, "Proxy(IBinder binder) {")?;
         fmt.increment();
         fmt!(fmt, "mBinder = binder;")?;
@@ -894,11 +932,13 @@ pub mod interface {
         fmt.decrement();
         fmt!(fmt, "}")?;
         fmt.newline()?;
+
         fmt!(fmt, "@Override")?;
         fmt!(fmt, "public IBinder asBinder() {")?;
         fmt____!(fmt, "return mBinder;")?;
         fmt!(fmt, "}")?;
         fmt.newline()?;
+
         fmt!(fmt, "@Override")?;
         fmt!(fmt, "public boolean equals(final Object obj) {")?;
         fmt.increment();
@@ -912,12 +952,21 @@ pub mod interface {
         fmt.decrement();
         fmt!(fmt, "}")?;
         fmt.newline()?;
+
         fmt!(fmt, "@Override")?;
         fmt!(fmt, "public int hashCode() {")?;
         fmt____!(fmt, "return mBinder.hashCode();")?;
         fmt!(fmt, "}")?;
 
-        // Proxy methods
+        generate_proxy_methods(interface, fmt)?;
+        fmt.decrement();
+        fmt!(fmt, "}")?;
+        fmt.newline()?;
+
+        generate_interface_methods(interface, fmt)
+    }
+
+    fn generate_proxy_methods(interface: &Interface, fmt: &mut Formatter) -> Result<(), Error> {
         for method in &interface.methods {
             fmt.newline()?;
             let ident = &method.ident;
@@ -956,20 +1005,16 @@ pub mod interface {
             fmt.decrement();
             fmt!(fmt, "}")?;
         }
-        fmt.decrement();
-        fmt!(fmt, "}")?;
+        Ok(())
+    }
 
-        fmt.newline()?;
-
+    fn generate_interface_methods(interface: &Interface, fmt: &mut Formatter) -> Result<(), Error> {
         for method in &interface.methods {
             let ty = method.return_type();
             let ident = &method.ident;
             let arguments = method.arguments.java();
             fmt!(fmt, "public {} {}({}) throws RemoteException;", ty, ident, arguments)?;
         }
-        fmt.decrement();
-        fmt!(fmt, "}")?;
-
-        fmt.flush().map_err(Into::into)
+        Ok(())
     }
 }
