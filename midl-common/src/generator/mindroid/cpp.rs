@@ -30,8 +30,8 @@ use std::{
 /// Generate mindroid c++ code into out
 pub(super) fn generate(model: &Model, out: &Path, license: Option<&str>) -> Result<i32, Error> {
     info!("Generating {} objects", model.objects.len());
-    for o in model.objects.values() {
-        match o {
+    for object in model.objects.values() {
+        match object {
             Object::Class(ref c) if !c.borrow().annotations.contains(IMPORT_ANNOTATION) => {
                 class::generate(&*c.borrow(), out, license)?;
             }
@@ -77,8 +77,8 @@ mod enumeration {
         fmt.newline()?;
 
         fmt!(fmt, "enum class {} {{", ident)?;
-        for i in &e.items {
-            fmt____!(fmt, "{},", i.ident())?;
+        for item in &e.items {
+            fmt____!(fmt, "{},", item.ident())?;
         }
 
         fmt!(fmt, "};")?;
@@ -103,7 +103,7 @@ mod class {
     use failure::Error;
     use std::{io::Write, path::Path};
 
-    pub(super) fn generate(c: &Class, out: &Path, license: Option<&str>) -> Result<(), Error> {
+    pub(super) fn generate(class: &Class, out: &Path, license: Option<&str>) -> Result<(), Error> {
         // Generate cpp file for classes only if needed
         let is_pod_string = |c: &Constant| {
             if let Type::Pod(PodType::String) = c.type_ {
@@ -112,16 +112,16 @@ mod class {
                 false
             }
         };
-        if c.constants.iter().any(is_pod_string) {
-            cpp(c, out, license)?;
+        if class.constants.iter().any(is_pod_string) {
+            cpp(class, out, license)?;
         }
 
-        header(c, out, license)
+        header(class, out, license)
     }
 
-    fn header(c: &Class, out: &Path, license: Option<&str>) -> Result<(), Error> {
-        let mut fmt = Formatter::new(writer(&c.name, out, "h")?);
-        let name = &c.name;
+    fn header(class: &Class, out: &Path, license: Option<&str>) -> Result<(), Error> {
+        let mut fmt = Formatter::new(writer(&class.name, out, "h")?);
+        let name = &class.name;
         let ident = &name.ident;
         let package = &name.package;
 
@@ -138,9 +138,9 @@ mod class {
         fmt!(fmt, "#include <mindroid/lang/Object.h>")?;
         fmt!(fmt, "#include <mindroid/lang/String.h>")?;
 
-        let dependencies = map_dependencies(&c.dependencies(false));
-        for d in &dependencies {
-            fmt!(fmt, "#include <{}>", d.as_fs_path("h").display())?;
+        let dependencies = map_dependencies(&class.dependencies(false));
+        for dependency in &dependencies {
+            fmt!(fmt, "#include <{}>", dependency.as_fs_path("h").display())?;
         }
         fmt.newline()?;
 
@@ -157,26 +157,26 @@ mod class {
         fmt!(fmt, "public:")?;
 
         // Declare constants
-        for cst in &c.constants {
-            let ident = &cst.ident;
-            match &cst.type_ {
+        for constant in &class.constants {
+            let ident = &constant.ident;
+            match &constant.type_ {
                 Type::Pod(PodType::String) => fmt____!(fmt, "static const sp<String> {};", ident)?,
-                Type::Pod(p) => fmt____!(fmt, "static const {} {} = {};", p.cpp(), ident, cst.value)?,
+                Type::Pod(p) => fmt____!(fmt, "static const {} {} = {};", p.cpp(), ident, constant.value)?,
                 _ => {
-                    let n = &c.name;
-                    let t = &cst.type_;
+                    let n = &class.name;
+                    let t = &constant.type_;
                     unimplemented!("Constant {} of struct {} with type {}", ident, n, t)
                 }
             }
         }
-        if !c.constants.is_empty() && !c.fields.is_empty() {
+        if !class.constants.is_empty() && !class.fields.is_empty() {
             fmt.newline()?;
         }
 
-        if !c.fields.is_empty() {
+        if !class.fields.is_empty() {
             fmt.increment();
             // Declare and implement getter and setter
-            for field in &c.fields {
+            for field in &class.fields {
                 let ident = &field.ident;
                 let member = format!("m{}", ident.uppercase());
                 let ty = field.type_.cpp();
@@ -207,7 +207,7 @@ mod class {
 
             fmt!(fmt, "private:")?;
             // Members
-            for field in &c.fields {
+            for field in &class.fields {
                 let ty = field.type_.cpp();
                 fmt____!(fmt, "{} m{};", ty, field.ident.uppercase())?;
             }
@@ -222,27 +222,27 @@ mod class {
         fmt.flush().map_err(Into::into)
     }
 
-    fn cpp(c: &Class, out: &Path, license: Option<&str>) -> Result<(), Error> {
-        let mut fmt = Formatter::new(writer(&c.name, out, "cpp")?);
-        let name = &c.name;
+    fn cpp(class: &Class, out: &Path, license: Option<&str>) -> Result<(), Error> {
+        let mut fmt = Formatter::new(writer(&class.name, out, "cpp")?);
+        let name = &class.name;
         let package = &name.package;
 
-        if let Some(lic) = license {
-            fmt!(fmt, lic)?;
+        if let Some(license) = license {
+            fmt!(fmt, license)?;
             fmt.newline()?;
         }
 
-        fmt!(fmt, "#include <{}>", c.name.as_fs_path("h").display())?;
+        fmt!(fmt, "#include <{}>", class.name.as_fs_path("h").display())?;
         fmt.newline()?;
 
         namespace_open(&mut fmt, package)?;
         fmt.newline()?;
 
         // Declare constants
-        for cst in &c.constants {
-            let ident = &cst.ident;
-            if let Type::Pod(PodType::String) = cst.type_ {
-                let value = &cst.value;
+        for constant in &class.constants {
+            let ident = &constant.ident;
+            if let Type::Pod(PodType::String) = constant.type_ {
+                let value = &constant.value;
                 fmt!(
                     fmt,
                     "const sp<String> {}::{} = String::valueOf({});",
@@ -275,30 +275,30 @@ mod interface {
     use itertools::Itertools;
     use std::{io::Write, path::Path};
 
-    pub(super) fn generate(i: &Interface, out: &Path, license: Option<&str>) -> Result<(), Error> {
-        header(i, out, license)?;
-        cpp(i, out, license)
+    pub(super) fn generate(interface: &Interface, out: &Path, license: Option<&str>) -> Result<(), Error> {
+        header(interface, out, license)?;
+        cpp(interface, out, license)
     }
 
     /// Generate inderface header
     #[cfg_attr(feature = "cargo-clippy", allow(clippy::cyclomatic_complexity))]
-    fn header(i: &Interface, out: &Path, license: Option<&str>) -> Result<(), Error> {
-        let mut fmt = Formatter::new(writer(&i.name, out, "h")?);
-        let name = &i.name;
+    fn header(interface: &Interface, out: &Path, license: Option<&str>) -> Result<(), Error> {
+        let mut fmt = Formatter::new(writer(&interface.name, out, "h")?);
+        let name = &interface.name;
         let binder = binder_name(&name).ident.clone();
         let binder_package = Package(vec!["binder".into()]);
         let ident = &name.ident;
         let package = &name.package;
 
-        if let Some(lic) = license {
-            fmt!(fmt, lic)?;
+        if let Some(license) = license {
+            fmt!(fmt, license)?;
             fmt.newline()?;
         }
 
         guard_open(&mut fmt, &name)?;
         fmt.newline()?;
 
-        let need_void = i.methods.iter().any(|m| m.is_promise() && m.type_.is_none());
+        let need_void = interface.methods.iter().any(|m| m.is_promise() && m.type_.is_none());
 
         // Includes
         fmt!(fmt, "#include <mindroid/lang/Class.h>")?;
@@ -315,7 +315,7 @@ mod interface {
         fmt!(fmt, "#include <mindroid/os/RemoteException.h>")?;
         fmt!(fmt, "#include <mindroid/util/concurrent/Promise.h>")?;
 
-        let dependencies = map_dependencies(&i.dependencies(true));
+        let dependencies = map_dependencies(&interface.dependencies(true));
         for i in &dependencies {
             fmt!(fmt, "#include <{}>", i.as_fs_path("h").display())?;
         }
@@ -335,18 +335,18 @@ mod interface {
         // Interface
         fmt!(fmt, "class {} : public mindroid::IInterface {{", ident)?;
         fmt!(fmt, "public:")?;
-        for m in &i.methods {
-            let ident = &m.ident;
-            let ty = if m.is_promise() {
-                if m.type_.is_none() {
+        for method in &interface.methods {
+            let ident = &method.ident;
+            let ty = if method.is_promise() {
+                if method.type_.is_none() {
                     "sp<mindroid::Promise<sp<Void>>>".into()
                 } else {
-                    format!("sp<mindroid::Promise<{}>>", m.type_.cpp())
+                    format!("sp<mindroid::Promise<{}>>", method.type_.cpp())
                 }
             } else {
-                m.type_.cpp()
+                method.type_.cpp()
             };
-            let args = m.args.cpp();
+            let args = method.args.cpp();
             fmt____!(fmt, "virtual {} {}({}) = 0;", ty, ident, args,)?;
         }
         fmt!(fmt, "};")?;
@@ -420,18 +420,18 @@ mod interface {
         fmt!(fmt, "}")?;
         fmt.newline()?;
 
-        for m in &i.methods {
-            let ident = &m.ident;
-            let ty = if m.is_promise() {
-                if m.type_.is_none() {
+        for method in &interface.methods {
+            let ident = &method.ident;
+            let ty = if method.is_promise() {
+                if method.type_.is_none() {
                     "sp<mindroid::Promise<sp<Void>>>".into()
                 } else {
-                    format!("sp<mindroid::Promise<{}>>", m.type_.cpp())
+                    format!("sp<mindroid::Promise<{}>>", method.type_.cpp())
                 }
             } else {
-                m.type_.cpp()
+                method.type_.cpp()
             };
-            let args = m.args.cpp();
+            let args = method.args.cpp();
             fmt!(fmt, "{} {}({}) override;", ty, ident, args,)?;
         }
         fmt.decrement();
@@ -448,8 +448,8 @@ mod interface {
         fmt!(fmt, "static const char* const DESCRIPTOR;")?;
 
         // Message id constants
-        for (index, method) in i.methods.iter().enumerate() {
-            let id = method_message_id(i, method);
+        for (index, method) in interface.methods.iter().enumerate() {
+            let id = method_message_id(interface, method);
             fmt!(fmt, "static const int32_t {} = {};", id, index + 1)?;
         }
         fmt.newline()?;
@@ -490,17 +490,17 @@ mod interface {
         fmt!(fmt, "}")?;
         fmt.newline()?;
 
-        for m in &i.methods {
-            let args = m.args.cpp();
-            let ident = &m.ident;
-            let ty = if m.is_promise() {
-                if m.type_.is_none() {
+        for method in &interface.methods {
+            let args = method.args.cpp();
+            let ident = &method.ident;
+            let ty = if method.is_promise() {
+                if method.type_.is_none() {
                     "sp<mindroid::Promise<sp<Void>>>".into()
                 } else {
-                    format!("sp<mindroid::Promise<{}>>", m.type_.cpp())
+                    format!("sp<mindroid::Promise<{}>>", method.type_.cpp())
                 }
             } else {
-                m.type_.cpp()
+                method.type_.cpp()
             };
             fmt!(fmt, "{} {}({}) override;", ty, ident, args)?;
         }
@@ -585,12 +585,12 @@ mod interface {
         fmt!(fmt, "sp<Parcel> _data = Parcel::obtain();")?;
 
         let mut first = true;
-        for a in &method.args {
+        for argument in &method.args {
             if !first {
                 fmt.newline()?;
                 first = false;
             }
-            a.type_.put(fmt, &"_data", &a.ident, 0)?;
+            argument.type_.put(fmt, &"_data", &argument.ident, 0)?;
         }
 
         if method.type_.is_some() || method.is_promise() {
@@ -648,12 +648,12 @@ mod interface {
 
         let get_args = |fmt: &mut Formatter| -> Result<(), Error> {
             let mut first = true;
-            for a in &method.args {
+            for argument in &method.args {
                 if !first {
                     fmt.newline()?;
                     first = false;
                 }
-                a.type_.get(fmt, &"data", &a.ident, 1)?;
+                argument.type_.get(fmt, &"data", &argument.ident, 1)?;
             }
             Ok(())
         };
@@ -715,16 +715,16 @@ mod interface {
     }
 
     #[cfg_attr(feature = "cargo-clippy", allow(clippy::cyclomatic_complexity))]
-    fn cpp(i: &Interface, out: &Path, license: Option<&str>) -> Result<(), Error> {
-        let mut fmt = Formatter::new(writer(&i.name, out, "cpp")?);
-        let name = &i.name;
+    fn cpp(interface: &Interface, out: &Path, license: Option<&str>) -> Result<(), Error> {
+        let mut fmt = Formatter::new(writer(&interface.name, out, "cpp")?);
+        let name = &interface.name;
         let ident = &name.ident;
         let package = &name.package;
         let binder = binder_name(&name).ident.clone();
         let binder_package = Package(vec!["binder".into()]);
 
-        if let Some(lic) = license {
-            fmt!(fmt, lic)?;
+        if let Some(license) = license {
+            fmt!(fmt, license)?;
             fmt.newline()?;
         }
 
@@ -757,8 +757,8 @@ mod interface {
         )?;
         fmt.increment();
         fmt!(fmt, "switch (what) {")?;
-        for m in &i.methods {
-            on_transact(i, m, &mut fmt)?
+        for method in &interface.methods {
+            on_transact(interface, method, &mut fmt)?
         }
         fmt!(fmt, "default:")?;
         fmt____!(fmt, "Binder::onTransact(what, data, result);")?;
@@ -767,8 +767,8 @@ mod interface {
         fmt!(fmt, "}")?;
         fmt.newline()?;
 
-        for m in &i.methods {
-            proxy_method(i, m, &mut fmt)?;
+        for method in &interface.methods {
+            proxy_method(interface, method, &mut fmt)?;
             fmt.newline()?;
         }
 
@@ -796,28 +796,28 @@ mod interface {
         fmt.newline()?;
 
         // Proxy methods
-        for m in &i.methods {
-            let ident = &m.ident;
-            let ty = m.type_.cpp();
-            let args = m.args.cpp();
-            if m.is_promise() {
+        for method in &interface.methods {
+            let ident = &method.ident;
+            let ty = method.type_.cpp();
+            let args = method.args.cpp();
+            if method.is_promise() {
                 // Handle async void case
-                let ty = if m.type_.is_some() { ty } else { "sp<Void>".into() };
+                let ty = if method.type_.is_some() { ty } else { "sp<Void>".into() };
                 fmt!(fmt, "sp<Promise<{}>> {}::Proxy::{}({}) {{", ty, binder, ident, args)?;
             } else {
                 fmt!(fmt, "{} {}::Proxy::{}({}) {{", ty, binder, ident, args)?;
             }
             fmt.increment();
             fmt!(fmt, "if (mStub != nullptr && mStub->isCurrentThread()) {")?;
-            let return_ = if m.type_.is_some() || m.is_promise() {
+            let return_ = if method.type_.is_some() || method.is_promise() {
                 "return "
             } else {
                 ""
             };
-            let args = args_call_cast(&m.args);
+            let args = args_call_cast(&method.args);
             fmt____!(fmt, "{}mStub->{}({});", return_, ident, args)?;
             fmt!(fmt, "} else {")?;
-            let args = args_call(&m.args);
+            let args = args_call(&method.args);
             fmt____!(fmt, "{}mProxy->{}({});", return_, ident, args)?;
             fmt!(fmt, "}")?;
             fmt.decrement();

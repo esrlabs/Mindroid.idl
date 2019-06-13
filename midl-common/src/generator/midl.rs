@@ -76,10 +76,10 @@ pub fn generate(model: &Model, license: Option<&str>, mode: OutputMode) -> Resul
 
     let mut files = Files::new(&options);
 
-    for n in model.objects.keys().sorted() {
-        match model.objects.get(n) {
+    for key in model.objects.keys().sorted() {
+        match model.objects.get(key) {
             Some(Object::Class(c)) => files
-                .write_for_name(&n)
+                .write_for_name(&key)
                 .and_then(|mut w| {
                     writeln!(w)
                         .map_err(Into::into)
@@ -87,7 +87,7 @@ pub fn generate(model: &Model, license: Option<&str>, mode: OutputMode) -> Resul
                 })
                 .map(|_| ())?,
             Some(Object::Enumeration(e)) => files
-                .write_for_name(&n)
+                .write_for_name(&key)
                 .and_then(|mut w| {
                     writeln!(w)
                         .map_err(Into::into)
@@ -95,7 +95,7 @@ pub fn generate(model: &Model, license: Option<&str>, mode: OutputMode) -> Resul
                 })
                 .map(|_| ())?,
             Some(Object::Interface(i)) => files
-                .write_for_name(&n)
+                .write_for_name(&key)
                 .and_then(|mut w| {
                     writeln!(w)
                         .map_err(Into::into)
@@ -302,25 +302,25 @@ impl ToMidl for Class {
                 OutputMode::Stdout => self.name.to_string(),
             }
         )?;
-        for c in &self.constants {
-            c.write(w, opt)?
+        for constant in &self.constants {
+            constant.write(w, opt)?
         }
         if !self.constants.is_empty() {
             w.write_all(&[b'\n'])?;
         }
-        for m in &self.fields {
-            m.write(w, opt)?
+        for method in &self.fields {
+            method.write(w, opt)?
         }
         writeln!(w, "}}")
     }
 }
 
 impl ToMidl for Argument {
-    fn format(&self, opt: &Options) -> String {
+    fn format(&self, options: &Options) -> String {
         let ty = match &self.type_ {
-            Type::Collection(c) => c.format(opt),
-            Type::Object(o) => o.format(opt),
-            Type::Pod(p) => p.format(opt),
+            Type::Collection(c) => c.format(options),
+            Type::Object(o) => o.format(options),
+            Type::Pod(p) => p.format(options),
         };
 
         let ty = if self.is_optional() { optionalize(&ty) } else { ty };
@@ -333,7 +333,7 @@ impl ToMidl for Argument {
             .iter()
             .filter(|a| a.as_str() != OPTIONAL_ANNOTATION)
             .filter_map(|k| self.annotations.groups.get(*k))
-            .map(|g| g.format(opt))
+            .map(|g| g.format(options))
             .join(" ");
         format!(
             "{}{}{} {}",
@@ -346,11 +346,11 @@ impl ToMidl for Argument {
 }
 
 impl ToMidl for Method {
-    fn format(&self, opt: &Options) -> String {
+    fn format(&self, options: &Options) -> String {
         let ty = if self.is_promise() {
-            format!("Promise<{}>", self.type_.format(opt))
+            format!("Promise<{}>", self.type_.format(options))
         } else {
-            self.type_.format(opt)
+            self.type_.format(options)
         };
         let ty = if self.is_optional() { optionalize(&ty) } else { ty };
         format!(
@@ -359,14 +359,14 @@ impl ToMidl for Method {
             self.ident,
             self.args
                 .iter()
-                .map(|a| a.format(opt))
+                .map(|a| a.format(options))
                 .collect::<Vec<String>>()
                 .join(", "),
             if self.is_oneway() { " oneway" } else { "" },
         )
     }
 
-    fn write(&self, w: &mut dyn Write, opt: &Options) -> Result<(), io::Error> {
+    fn write(&self, w: &mut dyn Write, options: &Options) -> Result<(), io::Error> {
         self.annotations
             .groups
             .keys()
@@ -376,9 +376,9 @@ impl ToMidl for Method {
             .filter(|a| a.as_str() != ONEWAY_ANNOTATION)
             .filter(|a| a.as_str() != OPTIONAL_ANNOTATION)
             .filter_map(|k| self.annotations.groups.get(*k))
-            .map(|g| g.format(opt))
+            .map(|g| g.format(options))
             .try_for_each(|a| writeln!(w, "    {}", a))?;
-        writeln!(w, "    {}", self.format(opt))
+        writeln!(w, "    {}", self.format(options))
     }
 }
 
@@ -434,8 +434,8 @@ impl ToMidl for Enumeration {
             self.annotations.write(w, opt)?;
         }
         writeln!(w, "enum {} {{", self.name)?;
-        for m in &self.items {
-            m.write(w, opt)?
+        for item in &self.items {
+            item.write(w, opt)?
         }
         writeln!(w, "}}")
     }

@@ -32,41 +32,41 @@ fn write<T: Write>(model: &Model, w: T) -> Result<i32, Error> {
     let mut w = BufWriter::new(w);
     writeln!(w, "@startuml")?;
 
-    for o in model.objects.values() {
-        match o {
-            Object::Class(ref c) => {
-                let c = &*c.borrow();
-                writeln!(w, "class {} {{", c.name)?;
-                for f in &c.fields {
-                    writeln!(w, "    {} {}", f.type_, f.ident)?;
+    for object in model.objects.values() {
+        match object {
+            Object::Class(ref class) => {
+                let class = &*class.borrow();
+                writeln!(w, "class {} {{", class.name)?;
+                for field in &class.fields {
+                    writeln!(w, "    {} {}", field.type_, field.ident)?;
                 }
                 writeln!(w, "}}")?;
                 writeln!(w)?;
 
-                for d in c.dependencies(true) {
-                    writeln!(w, "{} *-- {}", c.name, d)?;
+                for dependency in class.dependencies(true) {
+                    writeln!(w, "{} *-- {}", class.name, dependency)?;
                 }
                 writeln!(w)?;
             }
-            Object::Interface(ref i) => {
-                let i = &*i.borrow();
-                writeln!(w, "interface {} {{", i.name)?;
-                for m in &i.methods {
-                    writeln!(w, "    {}", m)?;
+            Object::Interface(ref interface) => {
+                let interface = &*interface.borrow();
+                writeln!(w, "interface {} {{", interface.name)?;
+                for method in &interface.methods {
+                    writeln!(w, "    {}", method)?;
                 }
                 writeln!(w, "}}")?;
 
                 writeln!(w)?;
-                for d in i.dependencies(true) {
-                    writeln!(w, "{} -> {}", i.name, d)?;
+                for dependency in interface.dependencies(true) {
+                    writeln!(w, "{} -> {}", interface.name, dependency)?;
                 }
                 writeln!(w)?;
             }
-            Object::Enumeration(e) => {
-                let e = &*e.borrow();
-                writeln!(w, "enum {} {{", e.name)?;
-                for i in &e.items {
-                    writeln!(w, "    {}", i.ident())?;
+            Object::Enumeration(enumeration) => {
+                let enumeration = &*enumeration.borrow();
+                writeln!(w, "enum {} {{", enumeration.name)?;
+                for item in &enumeration.items {
+                    writeln!(w, "    {}", item.ident())?;
                 }
                 writeln!(w, "}}")?;
                 writeln!(w)?;

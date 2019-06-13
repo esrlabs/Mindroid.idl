@@ -84,13 +84,13 @@ impl Formatter {
     }
 
     /// Write a line with current indentation
-    pub fn line<A: Display + Sized>(&mut self, t: A) -> Result<(), Error> {
-        self.line_with_indent(self.indent, t)
+    pub fn line<A: Display + Sized>(&mut self, text: A) -> Result<(), Error> {
+        self.line_with_indent(self.indent, text)
     }
 
     /// Write a line with given indentation
-    pub fn line_with_indent<A: Display + Sized>(&mut self, indent: usize, t: A) -> Result<(), Error> {
-        writeln!(self, "{}{}", " ".repeat(indent * Self::INDENTATION), t).map_err(Into::into)
+    pub fn line_with_indent<A: Display + Sized>(&mut self, indent: usize, text: A) -> Result<(), Error> {
+        writeln!(self, "{}{}", " ".repeat(indent * Self::INDENTATION), text).map_err(Into::into)
     }
 
     /// Write lines with current indentation
@@ -158,14 +158,14 @@ pub fn path_for_name(prefix: &Path, name: &Name, extension: &str) -> PathBuf {
 
 /// Open create a file with given extension for writing by
 /// creating the subdirs from the identifer package.
-pub fn create_file(f: &path::Path) -> Result<fs::File, Error> {
-    f.parent()
-        .ok_or_else(|| format_err!("{} has no parent", f.display()))
+pub fn create_file(file: &path::Path) -> Result<fs::File, Error> {
+    file.parent()
+        .ok_or_else(|| format_err!("{} has no parent", file.display()))
         .and_then(|dir| {
             fs::DirBuilder::new()
                 .recursive(true)
                 .create(&dir)
-                .and_then(|_| fs::File::create(f))
+                .and_then(|_| fs::File::create(file))
                 .map_err(Into::into)
         })
 }

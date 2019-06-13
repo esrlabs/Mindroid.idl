@@ -186,35 +186,35 @@ pub fn sanitize(model: &Model, language: &Language) {
         }
     };
 
-    for o in model.objects.values() {
-        match o {
-            Object::Enumeration(e) => {
-                let mut e = e.borrow_mut();
+    for object in model.objects.values() {
+        match object {
+            Object::Enumeration(enumeration) => {
+                let mut enumeration = enumeration.borrow_mut();
 
-                sanitize_ident(&mut e.name.ident);
-                for entry in &mut e.items {
+                sanitize_ident(&mut enumeration.name.ident);
+                for entry in &mut enumeration.items {
                     sanitize_ident(&mut entry.ident);
                 }
             }
-            Object::Class(c) => {
-                let mut c = c.borrow_mut();
+            Object::Class(class) => {
+                let mut class = class.borrow_mut();
 
-                sanitize_ident(&mut c.name.ident);
-                for f in &mut c.fields {
-                    sanitize_ident(&mut f.ident)
+                sanitize_ident(&mut class.name.ident);
+                for field in &mut class.fields {
+                    sanitize_ident(&mut field.ident)
                 }
-                for c in &mut c.constants {
-                    sanitize_ident(&mut c.ident)
+                for class in &mut class.constants {
+                    sanitize_ident(&mut class.ident)
                 }
             }
-            Object::Interface(i) => {
-                let mut i = i.borrow_mut();
+            Object::Interface(interface) => {
+                let mut interface = interface.borrow_mut();
 
-                sanitize_ident(&mut i.name.ident);
-                for m in &mut i.methods {
-                    sanitize_ident(&mut m.ident);
-                    for a in &mut m.args {
-                        sanitize_ident(&mut a.ident)
+                sanitize_ident(&mut interface.name.ident);
+                for method in &mut interface.methods {
+                    sanitize_ident(&mut method.ident);
+                    for argument in &mut method.args {
+                        sanitize_ident(&mut argument.ident)
                     }
                 }
             }

@@ -10,7 +10,7 @@
 // is strictly forbidden unless prior written permission is obtained
 // from E.S.R.Labs.
 
-use crate::model::{Argument, Collection, Ident, Name, Object, PodType, Type};
+use crate::model::{Collection, Ident, Name, Object, PodType, Type};
 use std::convert::Into;
 
 /// Java code formatting
@@ -21,22 +21,6 @@ pub trait Java {
     /// Java object representation
     fn object(&self) -> String {
         self.java()
-    }
-
-    fn optional(&self, is_optional: bool) -> String {
-        if is_optional {
-            format!("Optional<{}>", self.object())
-        } else {
-            self.java()
-        }
-    }
-
-    fn optional_object(&self, is_optional: bool) -> String {
-        if is_optional {
-            format!("Optional<{}>", self.object())
-        } else {
-            self.object()
-        }
     }
 }
 
@@ -141,27 +125,6 @@ impl Java for Object {
     }
 }
 
-impl Java for Argument {
-    fn java(&self) -> String {
-        format!(
-            "{} {}",
-            if self.is_optional() {
-                self.type_.optional(self.is_optional())
-            } else {
-                self.type_.java()
-            },
-            self.ident
-        )
-    }
-}
-
-/// Generate argument list string for signature use
-impl Java for Vec<Argument> {
-    fn java(&self) -> String {
-        self.iter().map(Java::java).collect::<Vec<String>>().join(", ")
-    }
-}
-
 impl Java for Collection {
     fn java(&self) -> String {
         match self {
@@ -199,8 +162,8 @@ pub mod enumeration {
 
         fmt!(fmt, "public enum {} {{", ident)?;
         fmt.increment();
-        for i in &e.items {
-            fmt!(fmt, "{},", i.ident())?;
+        for item in &e.items {
+            fmt!(fmt, "{},", item.ident())?;
         }
         fmt.decrement();
 
@@ -241,12 +204,12 @@ pub mod class {
         feature = "cargo-clippy",
         allow(clippy::cyclomatic_complexity, clippy::cognitive_complexity)
     )]
-    pub fn generate(c: &Class, out: &Path, license: Option<&str>) -> Result<(), Error> {
-        let name = &c.name;
+    pub fn generate(class: &Class, out: &Path, license: Option<&str>) -> Result<(), Error> {
+        let name = &class.name;
         let ident = &name.ident;
         let class_name = ident;
         let package = &name.package;
-        let mut fmt = Formatter::new(writer(&c.name, out, "java")?);
+        let mut fmt = Formatter::new(writer(&class.name, out, "java")?);
 
         if let Some(lic) = license {
             fmt!(fmt, lic)?;
@@ -259,7 +222,7 @@ pub mod class {
         }
 
         let mut imports: Vec<Name> = Vec::new();
-        let deps = c.dependencies(false);
+        let deps = class.dependencies(false);
 
         if deps.contains(&Dependency::Array) {
             imports.push("java.util.Arrays".into());
@@ -285,8 +248,8 @@ pub mod class {
             imports.push("java.util.Objects".into());
         }
 
-        for i in &imports {
-            fmt!(fmt, "import {};", i.as_path().join("."))?;
+        for import in &imports {
+            fmt!(fmt, "import {};", import.as_path().join("."))?;
         }
         if !imports.is_empty() {
             fmt.newline()?;
@@ -295,17 +258,17 @@ pub mod class {
         fmt!(fmt, "public class {} {{", ident)?;
         // Declare constants
         fmt.increment();
-        for c in &c.constants {
-            let ty = c.type_.java();
-            let ident = &c.ident;
-            let value = &c.value;
+        for class in &class.constants {
+            let ty = class.type_.java();
+            let ident = &class.ident;
+            let value = &class.value;
             fmt!(fmt, "public static final {} {} = {};", ty, ident, value)?;
         }
         fmt.decrement();
 
         // Members
         fmt.increment();
-        for field in &c.fields {
+        for field in &class.fields {
             fmt!(fmt, "private {} m{};", field.java_type(), field.ident.uppercase())?;
         }
         fmt.decrement();
@@ -316,7 +279,8 @@ pub mod class {
         fmt!(fmt, "public {}() {{", class_name)?;
         fmt.increment();
         //Optional should never be null, so initialize with empty
-        c.fields
+        class
+            .fields
             .iter()
             .filter(|field| field.is_optional())
             .try_for_each(|field| fmt!(fmt, "m{} = Optional.empty();", field.ident.uppercase()))?;
@@ -329,7 +293,7 @@ pub mod class {
         fmt.newline()?;
         fmt!(fmt, "public {name}({name} other) {{", name = class_name)?;
         fmt.increment();
-        for field in &c.fields {
+        for field in &class.fields {
             let ident = &field.ident;
             let member = format!("m{}", ident.uppercase());
             let ty = &field.type_;
@@ -348,12 +312,12 @@ pub mod class {
         fmt.newline()?;
 
         // Value constructor
-        if !c.fields.is_empty() {
+        if !class.fields.is_empty() {
             fmt.increment();
-            let mut args = c.fields.iter().map(|f| format!("{} {}", f.java_type(), f.ident));
+            let mut args = class.fields.iter().map(|f| format!("{} {}", f.java_type(), f.ident));
             fmt!(fmt, "public {}({}) {{", class_name, args.join(", "))?;
             fmt.increment();
-            for field in &c.fields {
+            for field in &class.fields {
                 if field.is_optional() {
                     fmt!(fmt, "Objects.requireNonNull({});", field.ident)?;
                 }
@@ -366,7 +330,7 @@ pub mod class {
 
         // Implement getter and setter
         fmt.increment();
-        for field in &c.fields {
+        for field in &class.fields {
             fmt.newline()?;
             let ident = &field.ident;
             let member = format!("m{}", ident.uppercase());
@@ -397,7 +361,7 @@ pub mod class {
             fmt.decrement();
             fmt!(fmt, "}")?;
         }
-        if !c.fields.is_empty() {
+        if !class.fields.is_empty() {
             fmt.newline()?;
         }
         fmt.decrement();
@@ -413,10 +377,10 @@ pub mod class {
             "if (object == null || getClass() != object.getClass()) return false;"
         )?;
         fmt.newline()?;
-        if !c.fields.is_empty() {
+        if !class.fields.is_empty() {
             fmt!(fmt, "final {} other = ({}) object;", ident, ident)?;
         }
-        for field in &c.fields {
+        for field in &class.fields {
             let ident = field.ident.uppercase();
             if field.is_optional() {
                 fmt!(fmt, "if (!m{i}.equals(other.m{i})) return false;", i = ident)?
@@ -465,7 +429,7 @@ pub mod class {
         fmt!(fmt, "public int hashCode() {")?;
         fmt.increment();
         fmt!(fmt, "int result = 0;")?;
-        for field in &c.fields {
+        for field in &class.fields {
             let ident = field.ident.uppercase();
             if field.is_optional() {
                 fmt!(fmt, "result = 31 * result + (m{i}.hashCode());", i = ident)?;
@@ -520,7 +484,7 @@ pub mod class {
         let mut first = true;
         fmt.increment();
         fmt.increment();
-        for field in &c.fields {
+        for field in &class.fields {
             let ident = &field.ident;
             let member = format!("m{}", ident.uppercase());
             let ty = &field.type_;
@@ -666,12 +630,83 @@ pub mod interface {
     use crate::{
         fmt, fmt____,
         generator::method_message_id,
-        model::{Interface, Method, Model, Name, Object, Type},
+        model::{Argument, Interface, Method, Model, Name, Object, Type},
         utils::{writer, Formatter},
     };
     use failure::Error;
     use itertools::Itertools;
     use std::{collections::HashSet, io::Write, path::Path};
+
+    /// Extension for Methods
+    pub trait MethodExt {
+        fn java_type(&self) -> String;
+        fn java_type_object(&self) -> String;
+        fn return_type(&self) -> String;
+    }
+
+    impl MethodExt for Method {
+        /// Return the Java representation of the fields type including the optional case
+        fn java_type(&self) -> String {
+            if self.is_optional() {
+                format!("Optional<{}>", self.type_.object())
+            } else {
+                self.type_.java()
+            }
+        }
+
+        /// Return the Java representation of the fields type including the optional case
+        /// In case the method is not async a the object notation of the methods
+        /// return type is generated
+        fn java_type_object(&self) -> String {
+            if self.is_optional() {
+                format!("Optional<{}>", self.type_.object())
+            } else {
+                self.type_.object()
+            }
+        }
+
+        /// Generate the return type of a Method
+        fn return_type(&self) -> String {
+            if self.is_promise() {
+                if self.is_optional() {
+                    format!("Future<Optional<{}>>", self.type_.object())
+                } else {
+                    format!("Future<{}>", self.type_.object())
+                }
+            } else {
+                self.java_type()
+            }
+        }
+    }
+
+    /// Extension for Arguments
+    pub trait ArgumentExt {
+        fn java_type(&self) -> String;
+    }
+
+    impl ArgumentExt for Argument {
+        /// Return the Java representation of the fields type including the optional case
+        fn java_type(&self) -> String {
+            if self.is_optional() {
+                format!("Optional<{}>", self.type_.object())
+            } else {
+                self.type_.java()
+            }
+        }
+    }
+
+    impl Java for Argument {
+        fn java(&self) -> String {
+            format!("{} {}", self.java_type(), self.ident)
+        }
+    }
+
+    /// Generate argument list string for signature use
+    impl Java for Vec<Argument> {
+        fn java(&self) -> String {
+            self.iter().map(Java::java).collect::<Vec<String>>().join(", ")
+        }
+    }
 
     pub trait Generator {
         /// Deliver a set of imports this interface depends on
@@ -697,12 +732,12 @@ pub mod interface {
     #[cfg_attr(feature = "cargo-clippy", allow(clippy::cyclomatic_complexity))]
     pub fn generate<G: Generator>(
         model: &Model,
-        i: &Interface,
+        interface: &Interface,
         out: &Path,
         license: Option<&str>,
     ) -> Result<(), Error> {
-        let mut fmt = Formatter::new(writer(&i.name, out, "java")?);
-        let name = &i.name;
+        let mut fmt = Formatter::new(writer(&interface.name, out, "java")?);
+        let name = &interface.name;
         let ident = &name.ident;
         let package = &name.package;
 
@@ -716,7 +751,7 @@ pub mod interface {
             fmt.newline()?;
         }
 
-        let mut imports = G::imports(i);
+        let mut imports = G::imports(interface);
 
         imports.insert("mindroid.os.Binder".into());
         imports.insert("mindroid.os.IBinder".into());
@@ -725,12 +760,12 @@ pub mod interface {
         imports.insert("mindroid.os.RemoteException".into());
         imports.insert("mindroid.util.concurrent.Promise".into());
         // Future is only needed if any method is async
-        if i.methods.iter().any(Method::is_promise) {
+        if interface.methods.iter().any(Method::is_promise) {
             imports.insert("mindroid.util.concurrent.Future".into());
         }
 
-        for i in imports.iter().sorted() {
-            fmt!(fmt, "import {};", i.as_path().join("."))?;
+        for import in imports.iter().sorted() {
+            fmt!(fmt, "import {};", import.as_path().join("."))?;
         }
         fmt.newline()?;
 
@@ -745,7 +780,7 @@ pub mod interface {
         fmt!(
             fmt,
             "public static final String DESCRIPTOR = \"{}\";",
-            G::descriptor(model, i)
+            G::descriptor(model, interface)
         )?;
         fmt.newline()?;
 
@@ -774,8 +809,8 @@ pub mod interface {
         )?;
         fmt.increment();
         fmt!(fmt, "switch (what) {")?;
-        for m in &i.methods {
-            G::on_transact(i, m, &mut fmt)?;
+        for method in &interface.methods {
+            G::on_transact(interface, method, &mut fmt)?;
         }
         fmt!(fmt, "default:")?;
         fmt____!(fmt, "super.onTransact(what, data, result);")?;
@@ -816,18 +851,18 @@ pub mod interface {
         fmt____!(fmt, "return mRemote.hashCode();")?;
         fmt!(fmt, "}")?;
 
-        for m in &i.methods {
+        for method in &interface.methods {
             fmt.newline()?;
-            G::proxy_method(i, m, &mut fmt)?;
+            G::proxy_method(interface, method, &mut fmt)?;
         }
 
         fmt.decrement();
         fmt!(fmt, "}")?;
 
         fmt.newline()?;
-        for method in &i.methods {
-            let id = method_message_id(i, method);
-            fmt!(fmt, "static final int {} = {};", id, G::message_id(i, method))?;
+        for method in &interface.methods {
+            let id = method_message_id(interface, method);
+            fmt!(fmt, "static final int {} = {};", id, G::message_id(interface, method))?;
         }
 
         fmt.decrement();
@@ -883,21 +918,21 @@ pub mod interface {
         fmt!(fmt, "}")?;
 
         // Proxy methods
-        for m in &i.methods {
+        for method in &interface.methods {
             fmt.newline()?;
-            let ident = &m.ident;
-            let ty = return_type(m);
-            let args = m.args.java();
+            let ident = &method.ident;
+            let ty = method.return_type();
+            let args = method.args.java();
             fmt!(fmt, "@Override")?;
             fmt!(fmt, "public {} {}({}) throws RemoteException {{", ty, ident, args)?;
             fmt.increment();
             fmt!(fmt, "if (mStub != null && mStub.isCurrentThread()) {")?;
-            let return_ = if m.type_.is_some() || m.is_promise() {
+            let return_ = if method.type_.is_some() || method.is_promise() {
                 "return "
             } else {
                 ""
             };
-            let args = m
+            let args = method
                 .args
                 .iter()
                 .map(|a| match &a.type_ {
@@ -910,7 +945,7 @@ pub mod interface {
                 .join(", ");
             fmt____!(fmt, "{}mStub.{}({});", return_, ident, args)?;
             fmt!(fmt, "} else {")?;
-            let args = m
+            let args = method
                 .args
                 .iter()
                 .map(|a| a.ident.as_str())
@@ -926,23 +961,15 @@ pub mod interface {
 
         fmt.newline()?;
 
-        for m in &i.methods {
-            let ident = &m.ident;
-            let ty = return_type(m);
-            let args = m.args.java();
+        for method in &interface.methods {
+            let ty = method.return_type();
+            let ident = &method.ident;
+            let args = method.args.java();
             fmt!(fmt, "public {} {}({}) throws RemoteException;", ty, ident, args)?;
         }
         fmt.decrement();
         fmt!(fmt, "}")?;
 
         fmt.flush().map_err(Into::into)
-    }
-
-    pub fn return_type(m: &Method) -> String {
-        if m.is_promise() {
-            format!("Future<{}>", m.type_.optional_object(m.is_optional()))
-        } else {
-            m.type_.optional(m.is_optional())
-        }
     }
 }

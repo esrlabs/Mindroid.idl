@@ -18,7 +18,11 @@ use crate::{
         IMPORT_ANNOTATION,
     },
     utils::{
-        java::{class::FieldExt, interface::return_type, Java},
+        java::{
+            class::FieldExt,
+            interface::{ArgumentExt, MethodExt},
+            Java,
+        },
         Formatter, Uppercase,
     },
 };
@@ -29,8 +33,8 @@ use std::{collections::HashSet, path::Path};
 
 pub(super) fn generate(model: &Model, out: &Path, license: Option<&str>) -> Result<i32, Error> {
     info!("Generating {} objects", model.objects.len());
-    for o in model.objects.values() {
-        match o {
+    for object in model.objects.values() {
+        match object {
             Object::Class(ref c) if !c.borrow().annotations.contains(IMPORT_ANNOTATION) => {
                 crate::utils::java::class::generate(&*c.borrow(), out, license)?;
             }
@@ -65,31 +69,31 @@ impl crate::utils::java::interface::Generator for Generator {
     }
 
     fn imports(interface: &Interface) -> HashSet<Name> {
-        let deps = interface.dependencies(true);
+        let dependencies = interface.dependencies(true);
 
         let mut imports = HashSet::new();
 
-        if deps.contains(&Dependency::Array) {
+        if dependencies.contains(&Dependency::Array) {
             imports.insert("java.util.Arrays".into());
             imports.insert("java.util.ArrayList".into());
         }
 
-        if deps.contains(&Dependency::List) {
+        if dependencies.contains(&Dependency::List) {
             imports.insert("java.util.List".into());
             imports.insert("java.util.ArrayList".into());
         }
 
-        if deps.contains(&Dependency::Set) {
+        if dependencies.contains(&Dependency::Set) {
             imports.insert("java.util.Set".into());
             imports.insert("java.util.HashSet".into());
         }
 
-        if deps.contains(&Dependency::Map) {
+        if dependencies.contains(&Dependency::Map) {
             imports.insert("java.util.Map".into());
             imports.insert("java.util.HashMap".into());
         }
 
-        if deps.contains(&Dependency::Optional) {
+        if dependencies.contains(&Dependency::Optional) {
             imports.insert("java.util.Optional".into());
         }
 
@@ -101,10 +105,9 @@ impl crate::utils::java::interface::Generator for Generator {
         let ident = &method.ident;
         let r#async = method.is_promise();
         let message_id = method_message_id(interface, method);
-        let is_optional = method.is_optional();
 
         // Method signature
-        let ty = return_type(method);
+        let ty = method.return_type();
         fmt!(fmt, "@Override")?;
         fmt!(
             fmt,
@@ -117,11 +120,11 @@ impl crate::utils::java::interface::Generator for Generator {
         fmt.increment();
 
         if method.type_.is_some() || method.is_promise() {
-            if let Some(ty) = &method.type_ {
+            if method.type_.is_some() {
                 fmt!(
                     fmt,
-                    "Promise<{ty}> _promise = new Promise<>();",
-                    ty = ty.optional_object(is_optional)
+                    "Promise<{}> _promise = new Promise<>();",
+                    method.java_type_object()
                 )?;
             } else {
                 fmt!(fmt, "Promise<Void> _promise = new Promise<>();")?;
@@ -131,24 +134,29 @@ impl crate::utils::java::interface::Generator for Generator {
         fmt!(fmt, "Parcel _data = Parcel.obtain();")?;
 
         let mut first = true;
-        for a in &method.args {
+        for argument in &method.args {
             if !first {
                 fmt.newline()?;
                 first = false;
             }
-            let is_optional = a.is_optional();
-            let ident = if is_optional {
-                fmt!(fmt, "if ({}.isPresent()) {{", a.ident)?;
+            let ident = if argument.is_optional() {
+                fmt!(fmt, "if ({}.isPresent()) {{", argument.ident)?;
                 fmt.increment();
-                let unwrapped = format!("{}Unwrapped", a.ident);
-                fmt!(fmt, "{} {} = {}.get();", a.type_.java(), unwrapped, a.ident)?;
+                let unwrapped = format!("{}Unwrapped", argument.ident);
+                fmt!(
+                    fmt,
+                    "{} {} = {}.get();",
+                    argument.type_.java(),
+                    unwrapped,
+                    argument.ident
+                )?;
                 fmt!(fmt, "_data.putBoolean(true);")?;
                 unwrapped
             } else {
-                a.ident.clone()
+                argument.ident.clone()
             };
-            a.type_.put(fmt, &"_data", &ident, 0)?;
-            if is_optional {
+            argument.type_.put(fmt, &"_data", &ident, 0)?;
+            if method.is_optional() {
                 fmt.decrement();
                 fmt!(fmt, "} else {")?;
                 fmt.increment();
@@ -169,7 +177,7 @@ impl crate::utils::java::interface::Generator for Generator {
             if let Some(t) = &method.type_ {
                 fmt!(fmt, "try {")?;
                 fmt.increment();
-                if is_optional {
+                if method.is_optional() {
                     fmt!(fmt, "if (parcel.getBoolean()) {")?;
                     fmt.increment();
                     t.get(fmt, "parcel", "_reply", 0)?;
@@ -222,28 +230,32 @@ impl crate::utils::java::interface::Generator for Generator {
 
         let get_args = |fmt: &mut Formatter| -> Result<(), Error> {
             let mut first = true;
-            for a in &method.args {
+            for argument in &method.args {
                 if !first {
                     fmt.newline()?;
                     first = false;
                 }
-                let is_optional = a.is_optional();
-                let ident = if is_optional {
+                let ident = if argument.is_optional() {
                     fmt!(
                         fmt,
                         "{} {} = Optional.empty();",
-                        a.type_.optional(true),
-                        a.ident.leveled(1)
+                        argument.java_type(),
+                        argument.ident.leveled(1)
                     )?;
                     fmt!(fmt, "if (data.getBoolean()) {")?;
                     fmt.increment();
-                    format!("{}Unwrapped", a.ident)
+                    format!("{}Unwrapped", argument.ident)
                 } else {
-                    a.ident.clone()
+                    argument.ident.clone()
                 };
-                a.type_.get(fmt, &"data", &ident, 1)?;
-                if is_optional {
-                    fmt!(fmt, "{} = Optional.of({});", a.ident.leveled(1), ident.leveled(1))?;
+                argument.type_.get(fmt, &"data", &ident, 1)?;
+                if argument.is_optional() {
+                    fmt!(
+                        fmt,
+                        "{} = Optional.of({});",
+                        argument.ident.leveled(1),
+                        ident.leveled(1)
+                    )?;
                     fmt.decrement();
                     fmt!(fmt, "}")?;
                 }
@@ -251,14 +263,17 @@ impl crate::utils::java::interface::Generator for Generator {
             Ok(())
         };
 
-        let is_optional = method.is_optional();
-
         fmt!(fmt, "case {}: {{", message_id)?;
         fmt.increment();
         if method.is_promise() {
-            let ty = method.type_.optional_object(is_optional);
             get_args(fmt)?;
-            fmt!(fmt, "Future<{}> _reply = {}({});", ty, ident, args)?;
+            fmt!(
+                fmt,
+                "Future<{}> _reply = {}({});",
+                method.java_type_object(),
+                ident,
+                args
+            )?;
             fmt!(fmt, "_reply.then((value, exception) -> {")?;
             fmt.increment();
             fmt!(fmt, "if (exception == null) {")?;
@@ -267,7 +282,7 @@ impl crate::utils::java::interface::Generator for Generator {
             fmt!(fmt, "try {")?;
             fmt.increment();
             if let Some(ty) = &method.type_ {
-                let value = if is_optional {
+                let value = if method.is_optional() {
                     fmt!(fmt, "if (value.isPresent()) {")?;
                     fmt.increment();
                     fmt!(fmt, "_parcel.putBoolean(true);")?;
@@ -277,7 +292,7 @@ impl crate::utils::java::interface::Generator for Generator {
                     "value"
                 };
                 ty.put(fmt, &"_parcel", value, 0)?;
-                if is_optional {
+                if method.is_optional() {
                     fmt.decrement();
                     fmt!(fmt, "} else {")?;
                     fmt____!(fmt, "_parcel.putBoolean(false);")?;
@@ -297,9 +312,9 @@ impl crate::utils::java::interface::Generator for Generator {
             fmt!(fmt, "});")?;
         } else if let Some(ty) = &method.type_ {
             get_args(fmt)?;
-            fmt!(fmt, "{} _reply = {}({});", ty.optional(is_optional), ident, args)?;
+            fmt!(fmt, "{} _reply = {}({});", method.java_type(), ident, args)?;
             fmt!(fmt, "Parcel _parcel = Parcel.obtain();")?;
-            let reply = if is_optional {
+            let reply = if method.is_optional() {
                 fmt!(fmt, "if (_reply.isPresent()) {")?;
                 fmt.increment();
                 fmt!(fmt, "_parcel.putBoolean(true);")?;
@@ -309,7 +324,7 @@ impl crate::utils::java::interface::Generator for Generator {
                 "_reply"
             };
             ty.put(fmt, &"_parcel", reply, 0)?;
-            if is_optional {
+            if method.is_optional() {
                 fmt.decrement();
                 fmt!(fmt, "} else {")?;
                 fmt____!(fmt, "_parcel.putBoolean(false);")?;
