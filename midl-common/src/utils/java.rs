@@ -141,10 +141,25 @@ impl Java for Object {
     }
 }
 
+impl Java for Argument {
+    fn java(&self) -> String {
+        format!(
+            "{} {}",
+            if self.is_optional() {
+                self.type_.optional(self.is_optional())
+            } else {
+                self.type_.java()
+            },
+            self.ident
+        )
+    }
+}
+
+/// Generate argument list string for signature use
 impl Java for Vec<Argument> {
     fn java(&self) -> String {
         self.iter()
-            .map(|a| format!("{} {}", a.type_.optional(a.is_optional()), a.ident))
+            .map(Java::java)
             .collect::<Vec<String>>()
             .join(", ")
     }
