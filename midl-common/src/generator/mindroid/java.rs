@@ -114,7 +114,7 @@ impl crate::utils::java::interface::Generator for Generator {
             "public {} {}({}) throws RemoteException {{",
             ty,
             ident,
-            method.args.java(),
+            method.arguments.java(),
         )?;
 
         fmt.increment();
@@ -134,7 +134,7 @@ impl crate::utils::java::interface::Generator for Generator {
         fmt!(fmt, "Parcel _data = Parcel.obtain();")?;
 
         let mut first = true;
-        for argument in &method.args {
+        for argument in &method.arguments {
             if !first {
                 fmt.newline()?;
                 first = false;
@@ -225,12 +225,12 @@ impl crate::utils::java::interface::Generator for Generator {
     #[cfg_attr(feature = "cargo-clippy", allow(clippy::cyclomatic_complexity))]
     fn on_transact(interface: &Interface, method: &Method, fmt: &mut Formatter) -> Result<(), Error> {
         let ident = &method.ident;
-        let args = method.args.iter().map(|a| a.ident.leveled(1)).join(", ");
+        let arguments = method.arguments.iter().map(|a| a.ident.leveled(1)).join(", ");
         let message_id = method_message_id(interface, method);
 
-        let get_args = |fmt: &mut Formatter| -> Result<(), Error> {
+        let get_arguments = |fmt: &mut Formatter| -> Result<(), Error> {
             let mut first = true;
-            for argument in &method.args {
+            for argument in &method.arguments {
                 if !first {
                     fmt.newline()?;
                     first = false;
@@ -266,13 +266,13 @@ impl crate::utils::java::interface::Generator for Generator {
         fmt!(fmt, "case {}: {{", message_id)?;
         fmt.increment();
         if method.is_promise() {
-            get_args(fmt)?;
+            get_arguments(fmt)?;
             fmt!(
                 fmt,
                 "Future<{}> _reply = {}({});",
                 method.java_type_object(),
                 ident,
-                args
+                arguments
             )?;
             fmt!(fmt, "_reply.then((value, exception) -> {")?;
             fmt.increment();
@@ -311,8 +311,8 @@ impl crate::utils::java::interface::Generator for Generator {
             fmt.decrement();
             fmt!(fmt, "});")?;
         } else if let Some(ty) = &method.type_ {
-            get_args(fmt)?;
-            fmt!(fmt, "{} _reply = {}({});", method.java_type(), ident, args)?;
+            get_arguments(fmt)?;
+            fmt!(fmt, "{} _reply = {}({});", method.java_type(), ident, arguments)?;
             fmt!(fmt, "Parcel _parcel = Parcel.obtain();")?;
             let reply = if method.is_optional() {
                 fmt!(fmt, "if (_reply.isPresent()) {")?;
@@ -332,11 +332,11 @@ impl crate::utils::java::interface::Generator for Generator {
             }
             fmt!(fmt, "result.complete(_parcel);")?;
         } else if method.is_oneway() {
-            get_args(fmt)?;
-            fmt!(fmt, "{}({});", ident, args)?;
+            get_arguments(fmt)?;
+            fmt!(fmt, "{}({});", ident, arguments)?;
         } else {
-            get_args(fmt)?;
-            fmt!(fmt, "{}({});", ident, args)?;
+            get_arguments(fmt)?;
+            fmt!(fmt, "{}({});", ident, arguments)?;
             fmt!(fmt, "result.complete(Parcel.obtain());")?;
         }
         fmt!(fmt, "break;")?;

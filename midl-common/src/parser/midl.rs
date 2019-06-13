@@ -1001,7 +1001,7 @@ mod test {
         assert!(method.type_.is_none());
         assert!(!method.is_promise());
         assert!(!method.is_oneway());
-        assert!(method.args.is_empty());
+        assert!(method.arguments.is_empty());
 
         let method = parse::<Method>(Rule::METHOD, "void foo() oneway;").unwrap();
         assert!(method.is_oneway());

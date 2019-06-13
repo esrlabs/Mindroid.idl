@@ -346,8 +346,8 @@ mod interface {
             } else {
                 method.type_.cpp()
             };
-            let args = method.args.cpp();
-            fmt____!(fmt, "virtual {} {}({}) = 0;", ty, ident, args,)?;
+            let arguments = method.arguments.cpp();
+            fmt____!(fmt, "virtual {} {}({}) = 0;", ty, ident, arguments,)?;
         }
         fmt!(fmt, "};")?;
         fmt.newline()?;
@@ -431,8 +431,8 @@ mod interface {
             } else {
                 method.type_.cpp()
             };
-            let args = method.args.cpp();
-            fmt!(fmt, "{} {}({}) override;", ty, ident, args,)?;
+            let arguments = method.arguments.cpp();
+            fmt!(fmt, "{} {}({}) override;", ty, ident, arguments,)?;
         }
         fmt.decrement();
         fmt.newline()?;
@@ -491,7 +491,7 @@ mod interface {
         fmt.newline()?;
 
         for method in &interface.methods {
-            let args = method.args.cpp();
+            let arguments = method.arguments.cpp();
             let ident = &method.ident;
             let ty = if method.is_promise() {
                 if method.type_.is_none() {
@@ -502,7 +502,7 @@ mod interface {
             } else {
                 method.type_.cpp()
             };
-            fmt!(fmt, "{} {}({}) override;", ty, ident, args)?;
+            fmt!(fmt, "{} {}({}) override;", ty, ident, arguments)?;
         }
         fmt.decrement();
         fmt.newline()?;
@@ -525,12 +525,17 @@ mod interface {
         fmt.flush().map_err(Into::into)
     }
 
-    fn args_call(args: &[Argument]) -> String {
-        args.iter().map(|a| a.ident.as_str()).collect::<Vec<&str>>().join(", ")
+    fn arguments_call(arguments: &[Argument]) -> String {
+        arguments
+            .iter()
+            .map(|a| a.ident.as_str())
+            .collect::<Vec<&str>>()
+            .join(", ")
     }
 
-    fn args_call_cast(args: &[Argument]) -> String {
-        args.iter()
+    fn arguments_call_cast(arguments: &[Argument]) -> String {
+        arguments
+            .iter()
             .map(|a| match &a.type_ {
                 Type::Object(Object::Interface(i)) => format!(
                     "{}::binder::{}::Stub::asInterface({}->asBinder())",
@@ -569,7 +574,7 @@ mod interface {
             ty,
             binder_name(&name).ident,
             ident,
-            method.args.cpp(),
+            method.arguments.cpp(),
         )?;
 
         fmt.increment();
@@ -585,7 +590,7 @@ mod interface {
         fmt!(fmt, "sp<Parcel> _data = Parcel::obtain();")?;
 
         let mut first = true;
-        for argument in &method.args {
+        for argument in &method.arguments {
             if !first {
                 fmt.newline()?;
                 first = false;
@@ -643,12 +648,12 @@ mod interface {
     #[cfg_attr(feature = "cargo-clippy", allow(clippy::cyclomatic_complexity))]
     pub fn on_transact(interface: &Interface, method: &Method, fmt: &mut Formatter) -> Result<(), Error> {
         let ident = &method.ident;
-        let args = method.args.iter().map(|a| a.ident.leveled(1)).join(", ");
+        let arguments = method.arguments.iter().map(|a| a.ident.leveled(1)).join(", ");
         let message_id = method_message_id(interface, method);
 
-        let get_args = |fmt: &mut Formatter| -> Result<(), Error> {
+        let get_arguments = |fmt: &mut Formatter| -> Result<(), Error> {
             let mut first = true;
-            for argument in &method.args {
+            for argument in &method.arguments {
                 if !first {
                     fmt.newline()?;
                     first = false;
@@ -666,8 +671,8 @@ mod interface {
             } else {
                 "sp<Void>".into()
             };
-            get_args(fmt)?;
-            fmt!(fmt, "sp<Promise<{}>> _reply = {}({});", ty, ident, args)?;
+            get_arguments(fmt)?;
+            fmt!(fmt, "sp<Promise<{}>> _reply = {}({});", ty, ident, arguments)?;
             fmt!(
                 fmt,
                 "_reply->then([=] (const {}& value, const sp<Exception>& exception) {{",
@@ -694,17 +699,17 @@ mod interface {
             fmt.decrement();
             fmt!(fmt, "});")?;
         } else if let Some(ty) = &method.type_ {
-            get_args(fmt)?;
-            fmt!(fmt, "{} _reply = {}({});", ty.cpp(), ident, args)?;
+            get_arguments(fmt)?;
+            fmt!(fmt, "{} _reply = {}({});", ty.cpp(), ident, arguments)?;
             fmt!(fmt, "sp<Parcel> _parcel = Parcel::obtain();")?;
             ty.put(fmt, &"_parcel", "_reply", 0)?;
             fmt!(fmt, "result->complete(_parcel);")?;
         } else if method.is_oneway() {
-            get_args(fmt)?;
-            fmt!(fmt, "{}({});", ident, args)?;
+            get_arguments(fmt)?;
+            fmt!(fmt, "{}({});", ident, arguments)?;
         } else {
-            get_args(fmt)?;
-            fmt!(fmt, "{}({});", ident, args)?;
+            get_arguments(fmt)?;
+            fmt!(fmt, "{}({});", ident, arguments)?;
             fmt!(fmt, "result->complete(Parcel::obtain());")?;
         }
         fmt!(fmt, "break;")?;
@@ -799,13 +804,20 @@ mod interface {
         for method in &interface.methods {
             let ident = &method.ident;
             let ty = method.type_.cpp();
-            let args = method.args.cpp();
+            let arguments = method.arguments.cpp();
             if method.is_promise() {
                 // Handle async void case
                 let ty = if method.type_.is_some() { ty } else { "sp<Void>".into() };
-                fmt!(fmt, "sp<Promise<{}>> {}::Proxy::{}({}) {{", ty, binder, ident, args)?;
+                fmt!(
+                    fmt,
+                    "sp<Promise<{}>> {}::Proxy::{}({}) {{",
+                    ty,
+                    binder,
+                    ident,
+                    arguments
+                )?;
             } else {
-                fmt!(fmt, "{} {}::Proxy::{}({}) {{", ty, binder, ident, args)?;
+                fmt!(fmt, "{} {}::Proxy::{}({}) {{", ty, binder, ident, arguments)?;
             }
             fmt.increment();
             fmt!(fmt, "if (mStub != nullptr && mStub->isCurrentThread()) {")?;
@@ -814,11 +826,11 @@ mod interface {
             } else {
                 ""
             };
-            let args = args_call_cast(&method.args);
-            fmt____!(fmt, "{}mStub->{}({});", return_, ident, args)?;
+            let arguments = arguments_call_cast(&method.arguments);
+            fmt____!(fmt, "{}mStub->{}({});", return_, ident, arguments)?;
             fmt!(fmt, "} else {")?;
-            let args = args_call(&method.args);
-            fmt____!(fmt, "{}mProxy->{}({});", return_, ident, args)?;
+            let arguments = arguments_call(&method.arguments);
+            fmt____!(fmt, "{}mProxy->{}({});", return_, ident, arguments)?;
             fmt!(fmt, "}")?;
             fmt.decrement();
             fmt!(fmt, "}")?;

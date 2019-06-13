@@ -314,8 +314,8 @@ pub mod class {
         // Value constructor
         if !class.fields.is_empty() {
             fmt.increment();
-            let mut args = class.fields.iter().map(|f| format!("{} {}", f.java_type(), f.ident));
-            fmt!(fmt, "public {}({}) {{", class_name, args.join(", "))?;
+            let mut arguments = class.fields.iter().map(|f| format!("{} {}", f.java_type(), f.ident));
+            fmt!(fmt, "public {}({}) {{", class_name, arguments.join(", "))?;
             fmt.increment();
             for field in &class.fields {
                 if field.is_optional() {
@@ -922,9 +922,9 @@ pub mod interface {
             fmt.newline()?;
             let ident = &method.ident;
             let ty = method.return_type();
-            let args = method.args.java();
+            let arguments = method.arguments.java();
             fmt!(fmt, "@Override")?;
-            fmt!(fmt, "public {} {}({}) throws RemoteException {{", ty, ident, args)?;
+            fmt!(fmt, "public {} {}({}) throws RemoteException {{", ty, ident, arguments)?;
             fmt.increment();
             fmt!(fmt, "if (mStub != null && mStub.isCurrentThread()) {")?;
             let return_ = if method.type_.is_some() || method.is_promise() {
@@ -932,8 +932,8 @@ pub mod interface {
             } else {
                 ""
             };
-            let args = method
-                .args
+            let arguments = method
+                .arguments
                 .iter()
                 .map(|a| match &a.type_ {
                     Type::Object(Object::Interface(i)) => {
@@ -943,15 +943,15 @@ pub mod interface {
                 })
                 .collect::<Vec<String>>()
                 .join(", ");
-            fmt____!(fmt, "{}mStub.{}({});", return_, ident, args)?;
+            fmt____!(fmt, "{}mStub.{}({});", return_, ident, arguments)?;
             fmt!(fmt, "} else {")?;
-            let args = method
-                .args
+            let arguments = method
+                .arguments
                 .iter()
                 .map(|a| a.ident.as_str())
                 .collect::<Vec<&str>>()
                 .join(", ");
-            fmt____!(fmt, "{}mProxy.{}({});", return_, ident, args)?;
+            fmt____!(fmt, "{}mProxy.{}({});", return_, ident, arguments)?;
             fmt!(fmt, "}")?;
             fmt.decrement();
             fmt!(fmt, "}")?;
@@ -964,8 +964,8 @@ pub mod interface {
         for method in &interface.methods {
             let ty = method.return_type();
             let ident = &method.ident;
-            let args = method.args.java();
-            fmt!(fmt, "public {} {}({}) throws RemoteException;", ty, ident, args)?;
+            let arguments = method.arguments.java();
+            fmt!(fmt, "public {} {}({}) throws RemoteException;", ty, ident, arguments)?;
         }
         fmt.decrement();
         fmt!(fmt, "}")?;

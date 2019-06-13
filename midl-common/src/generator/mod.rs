@@ -213,7 +213,7 @@ pub fn sanitize(model: &Model, language: &Language) {
                 sanitize_ident(&mut interface.name.ident);
                 for method in &mut interface.methods {
                     sanitize_ident(&mut method.ident);
-                    for argument in &mut method.args {
+                    for argument in &mut method.arguments {
                         sanitize_ident(&mut argument.ident)
                     }
                 }

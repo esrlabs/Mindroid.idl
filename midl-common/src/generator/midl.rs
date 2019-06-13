@@ -357,7 +357,7 @@ impl ToMidl for Method {
             "{} {}({}){};",
             ty,
             self.ident,
-            self.args
+            self.arguments
                 .iter()
                 .map(|a| a.format(options))
                 .collect::<Vec<String>>()

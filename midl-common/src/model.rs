@@ -673,16 +673,16 @@ impl Display for Argument {
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Method {
     pub ident: Ident,
-    pub args: Vec<Argument>,
+    pub arguments: Vec<Argument>,
     pub type_: Option<Type>,
     pub annotations: Annotations,
 }
 
 impl Method {
-    pub fn new(ident: Ident, args: Vec<Argument>, type_: Option<Type>, annotations: Annotations) -> Method {
+    pub fn new(ident: Ident, arguments: Vec<Argument>, type_: Option<Type>, annotations: Annotations) -> Method {
         Method {
             ident,
-            args,
+            arguments,
             type_,
             annotations,
         }
@@ -712,7 +712,7 @@ impl Display for Method {
                 "void".to_string()
             },
             self.ident,
-            self.args
+            self.arguments
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<String>>()
@@ -744,7 +744,7 @@ impl<'a> Interface {
     /// List of named objects this interface depends on
     pub fn dependencies(&self, recursive: bool) -> HashSet<Dependency> {
         let return_types = self.methods.iter().filter_map(|m| m.type_.as_ref());
-        let arguments = self.methods.iter().flat_map(|m| &m.args).map(|a| &a.type_);
+        let arguments = self.methods.iter().flat_map(|m| &m.arguments).map(|a| &a.type_);
         let types = return_types.chain(arguments).collect::<Vec<&Type>>();
         let mut deps = dependencies(&types, recursive);
         if self.methods.iter().any(Method::is_optional) {
@@ -753,7 +753,7 @@ impl<'a> Interface {
             let optional_arg = self
                 .methods
                 .iter()
-                .flat_map(|m| m.args.iter())
+                .flat_map(|m| m.arguments.iter())
                 .any(Argument::is_optional);
             if optional_arg {
                 deps.insert(Dependency::Optional);
@@ -812,8 +812,13 @@ impl<'a> Model {
 
         // Check for unique method signatures despite return type
         {
-            let method_to_string =
-                |f: &Method| format!("{}({})", f.ident, f.args.iter().map(ToString::to_string).join(", "));
+            let method_to_string = |f: &Method| {
+                format!(
+                    "{}({})",
+                    f.ident,
+                    f.arguments.iter().map(ToString::to_string).join(", ")
+                )
+            };
             let unique_methods = i.methods.iter().map(method_to_string).collect::<HashSet<String>>();
             if unique_methods.len() != i.methods.len() {
                 return Err(ModelError::DuplicateMethod {
@@ -955,7 +960,7 @@ pub fn resolve(model: Model) -> Result<Model, Error> {
                         method.type_ = Some(t.clone().resolve(&model, &name)?);
                     }
 
-                    for arg in &mut method.args {
+                    for arg in &mut method.arguments {
                         arg.type_ = arg.type_.clone().resolve(&model, &name)?;
                     }
                 }
