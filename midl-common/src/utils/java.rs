@@ -10,7 +10,7 @@
 // is strictly forbidden unless prior written permission is obtained
 // from E.S.R.Labs.
 
-use crate::model::{Argument, Class, Collection, Dependency, Ident, Name, Object, PodType, Type};
+use crate::model::{Argument, Collection, Ident, Name, Object, PodType, Type};
 use std::convert::Into;
 
 /// Java code formatting
@@ -158,10 +158,7 @@ impl Java for Argument {
 /// Generate argument list string for signature use
 impl Java for Vec<Argument> {
     fn java(&self) -> String {
-        self.iter()
-            .map(Java::java)
-            .collect::<Vec<String>>()
-            .join(", ")
+        self.iter().map(Java::java).collect::<Vec<String>>().join(", ")
     }
 }
 
@@ -214,7 +211,8 @@ pub mod enumeration {
 }
 
 pub mod class {
-    use super::{Class, Collection, Dependency, Java, Name, Object, PodType, Type};
+    use super::Java;
+    use crate::model::{Class, Collection, Dependency, Field, Name, Object, PodType, Type};
     use crate::{
         fmt,
         utils::{writer, Formatter, Uppercase},
@@ -222,6 +220,22 @@ pub mod class {
     use failure::{format_err, Error};
     use itertools::Itertools;
     use std::{io::Write, path::Path};
+
+    /// Extension for fields
+    pub trait FieldExt {
+        fn java_type(&self) -> String;
+    }
+
+    impl FieldExt for Field {
+        /// Return the Java representation of the fields type including the optional case
+        fn java_type(&self) -> String {
+            if self.is_optional() {
+                format!("Optional<{}>", self.type_.object())
+            } else {
+                self.type_.java()
+            }
+        }
+    }
 
     #[cfg_attr(
         feature = "cargo-clippy",
@@ -291,13 +305,8 @@ pub mod class {
 
         // Members
         fmt.increment();
-        for f in &c.fields {
-            fmt!(
-                fmt,
-                "private {} m{};",
-                f.type_.optional(f.is_optional()),
-                f.ident.uppercase()
-            )?;
+        for field in &c.fields {
+            fmt!(fmt, "private {} m{};", field.java_type(), field.ident.uppercase())?;
         }
         fmt.decrement();
 
@@ -309,8 +318,8 @@ pub mod class {
         //Optional should never be null, so initialize with empty
         c.fields
             .iter()
-            .filter(|f| f.is_optional())
-            .try_for_each(|f| fmt!(fmt, "m{} = Optional.empty();", f.ident.uppercase()))?;
+            .filter(|field| field.is_optional())
+            .try_for_each(|field| fmt!(fmt, "m{} = Optional.empty();", field.ident.uppercase()))?;
         fmt.decrement();
         fmt!(fmt, "}")?;
         fmt.decrement();
@@ -320,16 +329,16 @@ pub mod class {
         fmt.newline()?;
         fmt!(fmt, "public {name}({name} other) {{", name = class_name)?;
         fmt.increment();
-        for f in &c.fields {
-            let ident = &f.ident;
+        for field in &c.fields {
+            let ident = &field.ident;
             let member = format!("m{}", ident.uppercase());
-            let ty = &f.type_;
+            let ty = &field.type_;
             generate_copy(
                 &mut fmt,
                 &format!("this.{}", member),
                 &format!("other.{}", member),
                 ty,
-                f.is_optional(),
+                field.is_optional(),
             )?;
         }
         fmt.decrement();
@@ -341,17 +350,14 @@ pub mod class {
         // Value constructor
         if !c.fields.is_empty() {
             fmt.increment();
-            let mut args = c
-                .fields
-                .iter()
-                .map(|f| format!("{} {}", f.type_.optional(f.is_optional()), f.ident));
+            let mut args = c.fields.iter().map(|f| format!("{} {}", f.java_type(), f.ident));
             fmt!(fmt, "public {}({}) {{", class_name, args.join(", "))?;
             fmt.increment();
-            for f in &c.fields {
-                if f.is_optional() {
-                    fmt!(fmt, "Objects.requireNonNull({});", f.ident)?;
+            for field in &c.fields {
+                if field.is_optional() {
+                    fmt!(fmt, "Objects.requireNonNull({});", field.ident)?;
                 }
-                fmt!(fmt, "this.m{} = {};", f.ident.uppercase(), f.ident)?;
+                fmt!(fmt, "this.m{} = {};", field.ident.uppercase(), field.ident)?;
             }
             fmt.decrement();
             fmt!(fmt, "}")?;
@@ -360,14 +366,14 @@ pub mod class {
 
         // Implement getter and setter
         fmt.increment();
-        for f in &c.fields {
+        for field in &c.fields {
             fmt.newline()?;
-            let ident = &f.ident;
+            let ident = &field.ident;
             let member = format!("m{}", ident.uppercase());
-            let ty = f.type_.optional(f.is_optional());
+            let ty = field.java_type();
 
             // get
-            fmt!(fmt, "public {} get{}() {{", ty.java(), ident.uppercase())?;
+            fmt!(fmt, "public {} get{}() {{", ty, ident.uppercase())?;
             fmt.increment();
             fmt!(fmt, "return {};", member)?;
             fmt.decrement();
@@ -379,11 +385,11 @@ pub mod class {
                 "public {} set{}({} {}) {{",
                 class_name,
                 ident.uppercase(),
-                ty.java(),
+                ty,
                 ident
             )?;
             fmt.increment();
-            if f.is_optional() {
+            if field.is_optional() {
                 fmt!(fmt, "Objects.requireNonNull({});", ident)?;
             }
             fmt!(fmt, "this.{} = {};", member, ident)?;
@@ -410,12 +416,12 @@ pub mod class {
         if !c.fields.is_empty() {
             fmt!(fmt, "final {} other = ({}) object;", ident, ident)?;
         }
-        for f in &c.fields {
-            let ident = f.ident.uppercase();
-            if f.is_optional() {
+        for field in &c.fields {
+            let ident = field.ident.uppercase();
+            if field.is_optional() {
                 fmt!(fmt, "if (!m{i}.equals(other.m{i})) return false;", i = ident)?
             } else {
-                match &f.type_ {
+                match &field.type_ {
                     Type::Pod(PodType::F32) => {
                         fmt!(
                             fmt,
@@ -459,12 +465,12 @@ pub mod class {
         fmt!(fmt, "public int hashCode() {")?;
         fmt.increment();
         fmt!(fmt, "int result = 0;")?;
-        for f in &c.fields {
-            let ident = f.ident.uppercase();
-            if f.is_optional() {
+        for field in &c.fields {
+            let ident = field.ident.uppercase();
+            if field.is_optional() {
                 fmt!(fmt, "result = 31 * result + (m{i}.hashCode());", i = ident)?;
             } else {
-                match &f.type_ {
+                match &field.type_ {
                     Type::Pod(PodType::Bool) => {
                         fmt!(fmt, "result = 31 * result + (m{} ? 1 : 0);", ident)?;
                     }
@@ -514,11 +520,11 @@ pub mod class {
         let mut first = true;
         fmt.increment();
         fmt.increment();
-        for f in &c.fields {
-            let ident = &f.ident;
+        for field in &c.fields {
+            let ident = &field.ident;
             let member = format!("m{}", ident.uppercase());
-            let ty = &f.type_;
-            let is_string = is_string(ty) && !f.is_optional();
+            let ty = &field.type_;
+            let is_string = is_string(ty) && !field.is_optional();
             fmt!(
                 fmt,
                 "\"{comma}{ident}={string_start}\" + {value} +{string_end}",

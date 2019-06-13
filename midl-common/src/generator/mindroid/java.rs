@@ -18,7 +18,7 @@ use crate::{
         IMPORT_ANNOTATION,
     },
     utils::{
-        java::{interface::return_type, Java},
+        java::{class::FieldExt, interface::return_type, Java},
         Formatter, Uppercase,
     },
 };
@@ -460,30 +460,29 @@ impl Parcelable for Interface {
 
 impl Parcelable for Class {
     fn put(&self, fmt: &mut Formatter, parcel: &str, ident: &str, level: usize) -> Result<(), Error> {
-        for f in &self.fields {
-            let var = format!("{}{}", ident, f.ident.uppercase());
-            let is_optional = f.is_optional();
+        for field in &self.fields {
+            let var = format!("{}{}", ident, field.ident.uppercase());
             fmt!(
                 fmt,
                 "{ty} {inst}{ident} = {inst}.get{ident}();",
-                ty = f.type_.optional(is_optional),
+                ty = field.java_type(),
                 inst = ident,
-                ident = f.ident.uppercase()
+                ident = field.ident.uppercase()
             )?;
-            if is_optional {
+            if field.is_optional() {
                 fmt!(fmt, "if ({}.isPresent()) {{", var)?;
                 fmt.increment();
                 fmt!(fmt, "{}.putBoolean(true);", parcel)?;
             }
-            let var = if is_optional {
+            let var = if field.is_optional() {
                 let new_var = format!("{}Unwrapped", var);
-                fmt!(fmt, "{} {} = {}.get();", f.type_.java(), new_var, var)?;
+                fmt!(fmt, "{} {} = {}.get();", field.type_.java(), new_var, var)?;
                 new_var
             } else {
                 var
             };
-            f.type_.put(fmt, parcel, &var, level)?;
-            if is_optional {
+            field.type_.put(fmt, parcel, &var, level)?;
+            if field.is_optional() {
                 fmt.decrement();
                 fmt!(fmt, "} else {")?;
                 fmt.increment();
@@ -510,21 +509,20 @@ impl Parcelable for Class {
             // we're required to throw and cannot know this upstream.
             fmt!(fmt, "if ({} == null) throw new RemoteException();", parcel)?;
         } else {
-            for f in &self.fields {
-                let var = format!("{}{}", ident, f.ident.uppercase());
-                let is_optional = f.is_optional();
-                if is_optional {
+            for field in &self.fields {
+                let var = format!("{}{}", ident, field.ident.uppercase());
+                if field.is_optional() {
                     fmt!(fmt, "if ({}.getBoolean()) {{", parcel)?;
                     fmt.increment();
                 }
-                f.type_.get(fmt, parcel, &var, level)?;
-                if is_optional {
+                field.type_.get(fmt, parcel, &var, level)?;
+                if field.is_optional() {
                     fmt!(
                         fmt,
                         "{}.set{}(Optional.of({}));",
                         ident.leveled(level),
-                        f.ident.uppercase(),
-                        format!("{}{}", ident, f.ident.uppercase()).leveled(level)
+                        field.ident.uppercase(),
+                        format!("{}{}", ident, field.ident.uppercase()).leveled(level)
                     )?;
                     fmt.decrement();
                     fmt!(fmt, "}")?;
@@ -533,8 +531,8 @@ impl Parcelable for Class {
                         fmt,
                         "{}.set{}({});",
                         ident.leveled(level),
-                        f.ident.uppercase(),
-                        format!("{}{}", ident, f.ident.uppercase()).leveled(level)
+                        field.ident.uppercase(),
+                        format!("{}{}", ident, field.ident.uppercase()).leveled(level)
                     )?;
                 }
             }

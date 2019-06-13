@@ -176,10 +176,10 @@ mod class {
         if !c.fields.is_empty() {
             fmt.increment();
             // Declare and implement getter and setter
-            for f in &c.fields {
-                let ident = &f.ident;
+            for field in &c.fields {
+                let ident = &field.ident;
                 let member = format!("m{}", ident.uppercase());
-                let ty = f.type_.cpp();
+                let ty = field.type_.cpp();
 
                 // get
                 fmt!(fmt, "{} get{}() const {{", ty, ident.uppercase(),)?;
@@ -187,7 +187,7 @@ mod class {
                 fmt!(fmt, "}")?;
 
                 // set
-                let arg_type = match f.type_ {
+                let arg_type = match field.type_ {
                     Type::Pod(_) | Type::Object(Object::Enumeration(_)) => ty,
                     _ => format!("const {}&", ty),
                 };
@@ -196,7 +196,7 @@ mod class {
                 fmt!(fmt, "}")?;
 
                 // Additional setter with const char* interface
-                if let Type::Pod(PodType::String) = f.type_ {
+                if let Type::Pod(PodType::String) = field.type_ {
                     fmt!(fmt, "void set{}(const char* {}) {{", ident.uppercase(), ident)?;
                     fmt____!(fmt, "this->{} = String::valueOf({});", member, ident)?;
                     fmt!(fmt, "}")?;
@@ -207,9 +207,9 @@ mod class {
 
             fmt!(fmt, "private:")?;
             // Members
-            for f in &c.fields {
-                let ty = f.type_.cpp();
-                fmt____!(fmt, "{} m{};", ty, f.ident.uppercase())?;
+            for field in &c.fields {
+                let ty = field.type_.cpp();
+                fmt____!(fmt, "{} m{};", ty, field.ident.uppercase())?;
             }
         }
         fmt!(fmt, "};")?;
@@ -1071,15 +1071,15 @@ impl Parcelable for Interface {
 
 impl Parcelable for Class {
     fn put(&self, fmt: &mut Formatter, parcel: &str, ident: &str, level: usize) -> Result<(), Error> {
-        for f in &self.fields {
-            let var = format!("{}{}", ident, f.ident.uppercase());
+        for field in &self.fields {
+            let var = format!("{}{}", ident, field.ident.uppercase());
             fmt!(
                 fmt,
                 "auto {inst}{ident} = {inst}->get{ident}();",
                 inst = ident,
-                ident = f.ident.uppercase()
+                ident = field.ident.uppercase()
             )?;
-            f.type_.put(fmt, parcel, &var, level)?;
+            field.type_.put(fmt, parcel, &var, level)?;
         }
         Ok(())
     }
@@ -1093,15 +1093,15 @@ impl Parcelable for Class {
             format!("{}::{}", self.name.package.as_path().join("::"), self.name.ident)
         )?;
 
-        for f in &self.fields {
-            let var = format!("{}{}", ident, f.ident.uppercase());
-            f.type_.get(fmt, parcel, &var, level)?;
+        for field in &self.fields {
+            let var = format!("{}{}", ident, field.ident.uppercase());
+            field.type_.get(fmt, parcel, &var, level)?;
             fmt!(
                 fmt,
                 "{}->set{}({});",
                 ident.leveled(level),
-                f.ident.uppercase(),
-                format!("{}{}", ident, f.ident.uppercase()).leveled(level),
+                field.ident.uppercase(),
+                format!("{}{}", ident, field.ident.uppercase()).leveled(level),
             )?;
         }
         Ok(())
